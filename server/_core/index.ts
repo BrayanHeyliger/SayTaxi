@@ -9,6 +9,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { registerStripeWebhook } from "../routers/payments";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -34,8 +35,9 @@ async function startServer() {
   const server = createServer(app);
 
   // ── Socket.io — Real-time chat & trip events ────────────────────────────────
+  const allowedOrigin = process.env.APP_URL || (process.env.NODE_ENV === "production" ? false : "*");
   const io = new SocketIOServer(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: { origin: allowedOrigin, methods: ["GET", "POST"] },
     path: "/socket.io",
   });
 
@@ -111,6 +113,9 @@ async function startServer() {
 
   // Expose io for use in routes if needed
   (app as any).io = io;
+
+  // Stripe webhook — must be registered BEFORE express.json to receive raw body
+  registerStripeWebhook(app);
 
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
