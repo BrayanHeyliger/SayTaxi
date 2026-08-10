@@ -1,6 +1,7 @@
 import { VehiclesExtrasEditor } from "@/components/VehiclesExtrasEditor";
 import FAQEditor from "@/components/FAQEditor";
 import { AdminParcelStats } from "@/components/AdminParcelStats";
+import { AppleLoader, StatCardSkeleton, TableSkeleton, LoadingButton } from "@/components/AppleLoader";
 import { useNotificationHistory } from "@/hooks/useNotificationHistory";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
@@ -103,6 +104,12 @@ export default function AdminDashboard() {
   const { user, isAuthenticated, logout } = useLocalAuth();
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [tabKey, setTabKey] = useState(0);
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    setTabKey(k => k + 1);
+  };
   const [search, setSearch] = useState("");
   const [drivers, setDrivers] = useState<Driver[]>(MOCK_DRIVERS);
   const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
@@ -235,7 +242,7 @@ export default function AdminDashboard() {
         </div>
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {tabs.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} onClick={() => handleTabChange(tab.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${activeTab === tab.id ? "bg-green-500 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
               <tab.icon size={16} />
               <span className="flex-1 text-left">{tab.label}</span>
@@ -270,7 +277,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        <div className="p-6">
+        <div key={tabKey} className="p-6 animate-slide-in-up">
 
           {/* ── OVERVIEW ── */}
           {activeTab === "overview" && (
