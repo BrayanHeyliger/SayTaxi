@@ -3,10 +3,27 @@ import { publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, clients, drivers } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { createHash } from "node:crypto";
+import { randomBytes, pbkdf2Sync } from "node:crypto";
 
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_KEYLEN = 64;
+const PBKDF2_DIGEST = "sha512";
+
+function hashPassword(password: string, salt: string): string {
+  return pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, PBKDF2_KEYLEN, PBKDF2_DIGEST).toString("hex");
+}
+
+function createPasswordHash(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = hashPassword(password, salt);
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(":");
+  if (!salt || !hash) return false;
+  const inputHash = hashPassword(password, salt);
+  return inputHash === hash;
 }
 
 export const localAuthRouter = router({
@@ -19,21 +36,16 @@ export const localAuthRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Base de datos no disponible");
 
-      // Check for super admin
-      if (input.email === "admin@whatsapptaxi.com" && input.password === "Hosting01") {
-        return { id: 0, name: "Heyliger", email: "admin@whatsapptaxi.com", role: "admin" as const };
-      }
-
       // Find user by email
       const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
       if (!user) throw new Error("Credenciales incorrectas");
 
-      // Verify password hash
-      const storedHash = (user as any).passwordHash;
-      if (storedHash) {
-        const inputHash = hashPassword(input.password);
-        if (storedHash !== inputHash) throw new Error("Credenciales incorrectas");
+      // Verify password
+      const storedHash = user.passwordHash;
+      if (!storedHash || !verifyPassword(input.password, storedHash)) {
+        throw new Error("Credenciales incorrectas");
       }
+
       return {
         id: user.id,
         name: user.name || "Usuario",
@@ -63,17 +75,18 @@ export const localAuthRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Base de datos no disponible");
 
-      const hashedPassword = hashPassword(input.password);
+      const hashedPassword = createPasswordHash(input.password);
       const role = input.role === "fleet" ? "admin" : (input.role as "client" | "driver");
 
       // Create user
       const [result] = await db.insert(users).values({
-        openId: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        openId: `local_${Date.now()}_${randomBytes(8).toString("hex")}`,
         name: `${input.firstName} ${input.lastName || ""}`.trim(),
         email: input.email,
         phone: input.phone,
         role: role as "user" | "admin" | "client" | "driver",
         loginMethod: "local",
+        passwordHash: hashedPassword,
       }).$returningId();
 
       const userId = result.id;
@@ -106,3 +119,4 @@ export const localAuthRouter = router({
       };
     }),
 });
+
