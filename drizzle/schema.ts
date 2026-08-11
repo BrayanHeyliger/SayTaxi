@@ -101,6 +101,10 @@ export type Vehicle = typeof vehicles.$inferSelect;
 export type InsertVehicle = typeof vehicles.$inferInsert;
 
 // ===== TRIPS (Taxi Rides) =====
+// NOTE: SayTaxi is a SaaS booking-alert tool only.
+// - The 'fare' column stores a REFERENCE ESTIMATE provided by the driver or agreed between parties.
+//   It is NOT collected or processed by the platform. Payment goes directly client → driver.
+// - 'paymentMethod' and 'paymentStatus' reflect the direct client-driver transaction for record-keeping only.
 export const trips = mysqlTable("trips", {
   id: int("id").autoincrement().primaryKey(),
   clientId: int("clientId").notNull(),
@@ -147,6 +151,9 @@ export type Rating = typeof ratings.$inferSelect;
 export type InsertRating = typeof ratings.$inferInsert;
 
 // ===== PAYMENTS (Payment History) =====
+// NOTE: This table records DRIVER SOFTWARE SUBSCRIPTION payments only.
+//       Ride fare payments are handled directly between Client and Driver and are NOT
+//       collected or processed by SayTaxi. Any ride fare entries here are for audit/reference only.
 export const payments = mysqlTable("payments", {
   id: int("id").autoincrement().primaryKey(),
   tripId: int("tripId").notNull(),

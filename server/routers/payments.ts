@@ -2,6 +2,19 @@ import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import Stripe from "stripe";
 
+/**
+ * Payments Router — SaaS Subscriptions ONLY
+ *
+ * SayTaxi operates exclusively as a Software-as-a-Service (SaaS) booking engine.
+ * This router handles ONLY driver/fleet software subscription payments via Stripe.
+ *
+ * IMPORTANT:
+ * - Ride fares are NEVER collected, held, or processed here.
+ * - Ride fare payments are settled directly between Clients and Drivers.
+ * - The platform only charges Drivers a periodic software subscription fee.
+ * - Drivers are independent contractors; SayTaxi is NOT a Transportation Network Company (TNC).
+ */
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2026-07-29.dahlia" });
 
 export const paymentsRouter = router({
@@ -19,8 +32,8 @@ export const paymentsRouter = router({
           price_data: {
             currency: "usd",
             product_data: {
-              name: `WhatsAppTaxi — Plan ${input.planName}`,
-              description: `Suscripción mensual al Plan ${input.planName} de WhatsApp Taxi SaaS`,
+              name: `SayTaxi — Software Plan ${input.planName}`,
+              description: `Suscripción mensual al Plan ${input.planName} de SayTaxi SaaS. NOTA: Esta suscripción cubre solo el uso del software. La tarifa del viaje es pagada directamente entre cliente y conductor.`,
             },
             unit_amount: input.amount * 100,
             recurring: { interval: "month" },

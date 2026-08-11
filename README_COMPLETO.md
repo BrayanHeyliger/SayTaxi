@@ -1,7 +1,23 @@
 # WhatsApp Taxi SaaS - Plataforma Completa
 
 ## 📱 Descripción
-Plataforma SaaS profesional para gestionar servicios de taxi a través de WhatsApp. Incluye landing page, paneles de administración, gestión de conductores, clientes y pagos.
+
+**SayTaxi** es una plataforma **Software-as-a-Service (SaaS)** / motor de reservas para conductores y compañías de taxi. Opera **exclusivamente como herramienta tecnológica y canal de comunicación** — no presta servicios de transporte ni opera como Transportation Network Company (TNC) bajo la ley de Florida.
+
+## 🏛️ Modelo de Negocio SaaS / Lead Generation
+
+| Aspecto | Descripción |
+|---|---|
+| **Naturaleza** | Software / SaaS / Canal de comunicación |
+| **Ingresos** | Suscripción mensual del conductor/flota al software |
+| **Tarifa del viaje** | Pagada **directamente** entre cliente y conductor — la app NO la cobra |
+| **Asignación de viajes** | La app envía **alertas/leads**; el conductor acepta o rechaza **libremente, sin penalización** |
+| **Control de tarifas** | Cada conductor/compañía define sus propias tarifas |
+| **Relación con conductores** | **Contratistas totalmente independientes** — NO empleados ni afiliados |
+| **Marco legal** | Florida — NO es TNC, NO es Vehicle for Hire |
+
+### Avisos Legales
+> ⚠️ SayTaxi **NO** es una empresa de transporte. Los conductores son contratistas independientes. La tarifa del viaje es directa entre cliente y conductor. Ver documentos legales en `/docs/legal/`.
 
 ## ✨ Características Implementadas
 
