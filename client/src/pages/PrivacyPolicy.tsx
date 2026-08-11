@@ -14,7 +14,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen flex flex-col" style={{ background: "oklch(0.97 0.005 148 / 0.3)" }}>
       <Navbar />
       <main className="flex-1 container py-16 max-w-3xl mx-auto">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white/90 mb-8 transition-colors" style={{ color: "oklch(0.45 0.01 80)" }}>
+        <Link href="/" className="inline-flex items-center gap-2 text-sm mb-8 transition-colors" style={{ color: "oklch(0.45 0.01 80)" }}>
           <ArrowLeft size={15} />
           Volver al inicio
         </Link>

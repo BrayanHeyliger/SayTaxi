@@ -103,7 +103,15 @@ export default function FooterSection() {
                     ) : (
                       <a
                         href={anchorLinks[link] ?? "#"}
-                        onClick={anchorLinks[link] ? (e) => { e.preventDefault(); document.getElementById(anchorLinks[link].slice(1))?.scrollIntoView({ behavior: "smooth" }); } : undefined}
+                        onClick={(e) => {
+                          const anchor = anchorLinks[link];
+                          if (anchor) {
+                            e.preventDefault();
+                            document.getElementById(anchor.slice(1))?.scrollIntoView({ behavior: "smooth" });
+                          } else {
+                            e.preventDefault();
+                          }
+                        }}
                         className="text-white/40 hover:text-white/80 text-sm transition-colors text-left cursor-pointer"
                       >
                         {link}

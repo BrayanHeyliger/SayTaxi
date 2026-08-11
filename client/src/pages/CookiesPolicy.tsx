@@ -75,7 +75,7 @@ export default function CookiesPolicy() {
           <section>
             <h2 className="text-lg font-semibold mb-2" style={{ fontFamily: "'Sora', sans-serif", color: "oklch(0.14 0.01 250)" }}>4. Cookies de preferencia y analítica</h2>
             <p>
-              Las cookies de preferencia e analítica se instalan únicamente si otorgas tu consentimiento. Puedes revocar este consentimiento en cualquier momento desde la configuración de tu navegador o escribiendo a {config.contactEmail || "privacidad@saytaxi.com"}.
+              Las cookies de preferencia y analítica se instalan únicamente si otorgas tu consentimiento. Puedes revocar este consentimiento en cualquier momento desde la configuración de tu navegador o escribiendo a {config.contactEmail || "privacidad@saytaxi.com"}.
             </p>
           </section>
 
