@@ -7,4 +7,11 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  whatsappBusinessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ?? "",
+  whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
+  whatsappApiVersion: process.env.WHATSAPP_API_VERSION ?? "v18.0",
+  whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN ?? "",
+  whatsappWebhookToken: process.env.WHATSAPP_WEBHOOK_TOKEN ?? "",
+  whatsappWebhookUrl: process.env.WHATSAPP_WEBHOOK_URL ?? "",
+  whatsappAppSecret: process.env.WHATSAPP_APP_SECRET ?? "",
 };

@@ -247,3 +247,29 @@ export const contactMessages = mysqlTable("contactMessages", {
 
 export type ContactMessage = typeof contactMessages.$inferSelect;
 export type InsertContactMessage = typeof contactMessages.$inferInsert;
+
+// ===== WHATSAPP (Conversations + Logs) =====
+export const whatsappConversations = mysqlTable("whatsapp_conversations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: varchar("userId", { length: 64 }).notNull().unique(),
+  phoneNumber: varchar("phoneNumber", { length: 20 }).notNull(),
+  messages: json("messages").notNull(),
+  status: mysqlEnum("status", ["active", "awaiting_route", "awaiting_confirmation", "completed", "cancelled"])
+    .default("active")
+    .notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WhatsAppConversation = typeof whatsappConversations.$inferSelect;
+export type InsertWhatsAppConversation = typeof whatsappConversations.$inferInsert;
+
+export const whatsappLogs = mysqlTable("whatsapp_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  event: varchar("event", { length: 80 }).notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  data: json("data").notNull(),
+});
+
+export type WhatsAppLog = typeof whatsappLogs.$inferSelect;
+export type InsertWhatsAppLog = typeof whatsappLogs.$inferInsert;
