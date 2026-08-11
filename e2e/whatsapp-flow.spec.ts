@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getConversationState, processWebhookPayload } from "../server/routers/whatsapp";
+import { getConversationState, processWebhookPayload, upsertConversationState } from "../server/routers/whatsapp";
 
 function buildTextPayload(from: string, body: string, id = `msg_${Date.now()}`) {
   return {
@@ -77,6 +77,7 @@ describe("WhatsApp flow e2e (simulado)", () => {
 
     const conversation = await getConversationState(user);
     conversation.lastCompletedTripId = "trip_123";
+    await upsertConversationState(conversation);
 
     const rating = await processWebhookPayload(buildTextPayload(user, "5"));
     expect(rating.replies[0]).toContain("calificación");

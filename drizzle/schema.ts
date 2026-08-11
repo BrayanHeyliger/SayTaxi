@@ -261,8 +261,8 @@ export const whatsappConversations = mysqlTable("whatsapp_conversations", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
-export type WhatsAppConversation = typeof whatsappConversations.$inferSelect;
-export type InsertWhatsAppConversation = typeof whatsappConversations.$inferInsert;
+export type WhatsAppConversationRecord = typeof whatsappConversations.$inferSelect;
+export type InsertWhatsAppConversationRecord = typeof whatsappConversations.$inferInsert;
 
 export const whatsappLogs = mysqlTable("whatsapp_logs", {
   id: int("id").autoincrement().primaryKey(),

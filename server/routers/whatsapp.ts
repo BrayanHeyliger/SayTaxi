@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router } from "../_core/trpc";
 import { rawMutate, rawQuery } from "../db";
 import { WhatsAppClient, buildWhatsAppConfig } from "../whatsapp/client";
 import { applyConversationFlow, type TripSummary, type WhatsAppConversation } from "../whatsapp/flows";
@@ -69,6 +69,10 @@ async function persistConversation(conversation: WhatsAppConversation): Promise<
   );
 }
 
+export async function upsertConversationState(conversation: WhatsAppConversation): Promise<void> {
+  await persistConversation(conversation);
+}
+
 export async function appendWhatsAppLog(event: string, data: unknown): Promise<void> {
   await rawMutate(`INSERT INTO whatsapp_logs (event, data) VALUES (?, ?)`, [event, JSON.stringify(data)]);
 }
@@ -132,12 +136,18 @@ export async function processWebhookPayload(payload: unknown): Promise<{ process
     }
 
     if (flow.ratedTrip) {
+      const tripId = Number(flow.ratedTrip.tripId.replace(/\D/g, "")) || 0;
+      const [trip] = await rawQuery<{ driverId: number | null }>(`SELECT driverId FROM trips WHERE id = ? LIMIT 1`, [tripId]);
+      if (trip?.driverId && trip.driverId > 0) {
       await rawMutate(
         `INSERT INTO ratings (tripId, clientId, driverId, clientRating)
          VALUES (?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE clientRating = VALUES(clientRating), updatedAt = CURRENT_TIMESTAMP`,
-        [Number(flow.ratedTrip.tripId.replace(/\D/g, "")) || 0, Number(message.userId), 0, flow.ratedTrip.stars],
+          [tripId, Number(message.userId), trip.driverId, flow.ratedTrip.stars],
       );
+      } else {
+        await appendWhatsAppLog("rating_skipped_no_driver", { tripId, userId: message.userId });
+      }
     }
 
     await appendWhatsAppLog("message_processed", {
@@ -165,7 +175,7 @@ const sendMessageInput = z.object({
 });
 
 export const whatsappRouter = router({
-  sendMessage: publicProcedure.input(sendMessageInput).mutation(async ({ input }) => {
+  sendMessage: protectedProcedure.input(sendMessageInput).mutation(async ({ input }) => {
     await whatsappClient.sendTextMessage(input.phoneNumber, input.message);
     const conversation = await getConversationState(input.userId, input.phoneNumber);
     conversation.messages.push({ sender: "bot", type: "text", body: input.message, timestamp: Date.now() });
@@ -174,20 +184,20 @@ export const whatsappRouter = router({
     return { success: true } as const;
   }),
 
-  getConversation: publicProcedure
+  getConversation: protectedProcedure
     .input(z.object({ userId: z.string().min(1) }))
     .query(async ({ input }) => {
       return getConversationState(input.userId);
     }),
 
-  logEvent: publicProcedure
+  logEvent: protectedProcedure
     .input(z.object({ type: z.string().min(1), data: z.any() }))
     .mutation(async ({ input }) => {
       await appendWhatsAppLog(input.type, input.data);
       return { success: true } as const;
     }),
 
-  handleWebhook: publicProcedure
+  handleWebhook: protectedProcedure
     .input(z.object({ payload: z.any() }))
     .mutation(async ({ input }) => {
       return processWebhookPayload(input.payload);

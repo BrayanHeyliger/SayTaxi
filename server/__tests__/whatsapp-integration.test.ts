@@ -30,7 +30,18 @@ function payload(from: string, body: string) {
 const ctx: TrpcContext = {
   req: {} as TrpcContext["req"],
   res: { clearCookie: () => undefined } as unknown as TrpcContext["res"],
-  user: null,
+  user: {
+    id: 1,
+    openId: "user_1",
+    name: "Test User",
+    email: "test@example.com",
+    phone: null,
+    loginMethod: null,
+    role: "user",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  },
 };
 
 describe("whatsapp integration", () => {

@@ -26,3 +26,7 @@ WHATSAPP_APP_SECRET=xxxxx
    - `docker-compose up`
    - `pnpm dev`
 5. Probar con un mensaje real en WhatsApp.
+
+## Nota de Producción
+- El estado de conversación y rate limit usa memoria local como fallback cuando no hay base de datos disponible.
+- Para despliegues con múltiples instancias, usa un almacenamiento compartido (por ejemplo Redis) para mantener consistencia.
