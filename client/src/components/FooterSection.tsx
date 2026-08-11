@@ -5,12 +5,27 @@
 import { useI18n } from "@/contexts/I18nContext";
 import { Github, Twitter, Linkedin, Heart } from "lucide-react";
 import { useSiteConfig } from "@/contexts/SiteConfigContext";
+import { Link } from "wouter";
 
 const footerLinks = {
   Producto: ["Características", "Precios", "Changelog", "Roadmap"],
   Empresa: ["Sobre nosotros", "Blog", "Carreras", "Prensa"],
   Recursos: ["Documentación", "FAQ", "Guías", "Soporte"],
   Legal: ["Privacidad", "Términos de uso", "Cookies", "GDPR"],
+};
+
+const legalRoutes: Record<string, string> = {
+  "Privacidad": "/privacy",
+  "Términos de uso": "/terms",
+  "Cookies": "/cookies",
+  "GDPR": "/disclaimer",
+};
+
+const anchorLinks: Record<string, string> = {
+  "FAQ": "#faq",
+  "Características": "#features",
+  "Precios": "#pricing",
+  "Soporte": "#contact",
 };
 
 export default function FooterSection() {
@@ -78,13 +93,30 @@ export default function FooterSection() {
               <ul className="flex flex-col gap-2.5">
                 {links.map((link) => (
                   <li key={link}>
-                    <a
-                      href={link === "FAQ" ? "#faq" : link === "Características" ? "#features" : link === "Precios" ? "#pricing" : link === "Soporte" ? "#contact" : "#"}
-                      onClick={link === "FAQ" ? (e) => { e.preventDefault(); document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" }); } : undefined}
-                      className="text-white/40 hover:text-white/80 text-sm transition-colors text-left cursor-pointer"
-                    >
-                      {link}
-                    </a>
+                    {legalRoutes[link] ? (
+                      <Link
+                        href={legalRoutes[link]}
+                        className="text-white/40 hover:text-white/80 text-sm transition-colors"
+                      >
+                        {link}
+                      </Link>
+                    ) : (
+                      <a
+                        href={anchorLinks[link] ?? "#"}
+                        onClick={(e) => {
+                          const anchor = anchorLinks[link];
+                          if (anchor) {
+                            e.preventDefault();
+                            document.getElementById(anchor.slice(1))?.scrollIntoView({ behavior: "smooth" });
+                          } else {
+                            e.preventDefault();
+                          }
+                        }}
+                        className="text-white/40 hover:text-white/80 text-sm transition-colors text-left cursor-pointer"
+                      >
+                        {link}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
