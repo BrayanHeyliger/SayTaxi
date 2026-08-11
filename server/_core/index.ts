@@ -9,6 +9,9 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { applySecurity } from "./security";
+import { logger, requestLogger } from "./logger";
+import { registerHealthRoute } from "./health";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -32,6 +35,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  applySecurity(app);
+  app.use(requestLogger);
 
   // ── Socket.io — Real-time chat & trip events ────────────────────────────────
   const io = new SocketIOServer(server, {
@@ -43,7 +48,7 @@ async function startServer() {
   const chatRooms = new Map<string, { id: string; sender: string; senderRole: string; text: string; time: string }[]>();
 
   io.on("connection", (socket) => {
-    console.log(`[Socket.io] Client connected: ${socket.id}`);
+    logger.info({ socketId: socket.id }, "Socket client connected");
 
     // Join a trip chat room
     socket.on("join_room", ({ roomId, userId, role }: { roomId: string; userId: string; role: string }) => {
@@ -54,7 +59,7 @@ async function startServer() {
       // Send message history to the new joiner
       const history = chatRooms.get(roomId) || [];
       socket.emit("message_history", history);
-      console.log(`[Socket.io] ${role} ${userId} joined room ${roomId}`);
+      logger.info({ role, userId, roomId }, "Socket client joined room");
     });
 
     // Send a chat message
@@ -105,7 +110,7 @@ async function startServer() {
     });
 
     socket.on("disconnect", () => {
-      console.log(`[Socket.io] Client disconnected: ${socket.id}`);
+      logger.info({ socketId: socket.id }, "Socket client disconnected");
     });
   });
 
@@ -115,6 +120,7 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  registerHealthRoute(app);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   // tRPC API
@@ -136,12 +142,14 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    logger.warn(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    logger.info(`Server running on http://localhost:${port}/`);
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((error) => {
+  logger.error(error, "Failed to start server");
+});

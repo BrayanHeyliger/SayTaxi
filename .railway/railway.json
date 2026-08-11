@@ -1,0 +1,11 @@
+{
+  "build": {
+    "builder": "nixpacks",
+    "buildCommand": "pnpm install --frozen-lockfile && pnpm run build"
+  },
+  "start": "pnpm start",
+  "environment": {
+    "NODE_ENV": "production",
+    "PORT": 3000
+  }
+}
