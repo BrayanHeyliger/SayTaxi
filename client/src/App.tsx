@@ -14,6 +14,10 @@ import FleetDashboard from "./pages/FleetDashboard";
 import DispatcherDashboard from "./pages/DispatcherDashboard";
 import Payments from "./pages/Payments";
 import FAQPage from "./pages/FAQ";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfUse from "./pages/TermsOfUse";
+import CookiesPolicy from "./pages/CookiesPolicy";
+import Disclaimer from "./pages/Disclaimer";
 import { useLocalAuth } from "./contexts/LocalAuthContext";
 import { useEffect } from "react";
 
@@ -52,6 +56,10 @@ function Router() {
       <Route path={"/register"} component={Register} />
       <Route path={"/login"} component={Login} />
       <Route path={"/faq"} component={FAQPage} />
+      <Route path={"/privacy"} component={PrivacyPolicy} />
+      <Route path={"/terms"} component={TermsOfUse} />
+      <Route path={"/cookies"} component={CookiesPolicy} />
+      <Route path={"/disclaimer"} component={Disclaimer} />
       <Route path={"/payments"} component={Payments} />
       <Route path={"/client-dashboard"}>
         {() => <PrivateRoute component={ClientDashboard} allowedRoles={["client"]} />}
