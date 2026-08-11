@@ -13,6 +13,8 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
 import LeafletMap from "@/components/LeafletMap";
 import ReferralPanel from "@/components/ReferralPanel";
+import TermsAcceptanceModal from "@/components/TermsAcceptanceModal";
+import SaaSDisclaimer from "@/components/SaaSDisclaimer";
 
 import { TripChat } from "@/components/TripChat";
 import SafetyTipsButton from "@/components/SafetyTipsButton";
@@ -46,6 +48,12 @@ export default function DriverDashboard() {
   const [otpCode] = useState("4821"); // Demo OTP
   const [passengerRating, setPassengerRating] = useState(0);
   const [activeTab, setActiveTab] = useState<"trips" | "earnings" | "referrals" | "profile" | "docs" | "parcels">("trips");
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(() => {
+    return localStorage.getItem("driver_terms_accepted") === "true";
+  });
+  // TODO (production): persist terms acceptance server-side (with timestamp and driver ID)
+  // so it cannot be bypassed by clearing localStorage or switching devices.
+  // A server-side record also provides an audit trail for legal enforceability.
   const [earningsHistory] = useState<EarningsEntry[]>([
     { date: "Hoy", trips: completedCount, earnings },
     { date: "Ayer", trips: 8, earnings: 145.50 },
@@ -183,8 +191,19 @@ export default function DriverDashboard() {
 
   if (!isAuthenticated) return null;
 
+  const handleAcceptTerms = () => {
+    localStorage.setItem("driver_terms_accepted", "true");
+    setHasAcceptedTerms(true);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* T&C Modal — shown on first access; driver must accept before using the dashboard */}
+      <TermsAcceptanceModal
+        open={!hasAcceptedTerms}
+        userType="driver"
+        onAccept={handleAcceptTerms}
+      />
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
@@ -277,6 +296,11 @@ export default function DriverDashboard() {
         {/* Broadcast Announcements */}
         <div className="mb-4">
           <AnnouncementBanner target="drivers" />
+        </div>
+
+        {/* Legal disclaimer — SayTaxi is a software tool only */}
+        <div className="mb-4">
+          <SaaSDisclaimer compact />
         </div>
 
         {/* TAB: REFERIDOS */}
@@ -474,7 +498,10 @@ export default function DriverDashboard() {
                               <p className="text-xs text-slate-500">{new Date(trip.requestedAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</p>
                               {trip.isBid && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Puja</span>}
                             </div>
-                            <p className="font-bold text-green-600 text-xl">{trip.fare}</p>
+                            <div className="text-right">
+                              <p className="font-bold text-green-600 text-xl">{trip.fare}</p>
+                              <p className="text-xs text-slate-400">Ref. (acordada con cliente)</p>
+                            </div>
                           </div>
                           <div className="space-y-1.5 text-sm mb-4">
                             <p className="text-slate-600"><MapPin size={13} className="inline mr-1 text-green-500" />{trip.pickup}</p>
@@ -484,6 +511,7 @@ export default function DriverDashboard() {
                             <Button variant="outline" size="sm" onClick={() => handleRejectTrip(trip.id)} className="text-red-500 border-red-200">Rechazar</Button>
                             <Button size="sm" onClick={() => handleAcceptTrip(trip)} className="bg-green-500 hover:bg-green-600 text-white">Aceptar</Button>
                           </div>
+                          <p className="text-xs text-slate-400 text-center mt-1">Aceptar o rechazar es siempre voluntario — sin penalización.</p>
                         </div>
                       ))}
                     </div>

@@ -6,6 +6,7 @@ import { ArrowLeft, CreditCard, CheckCircle, Shield, Zap, Crown, Building2 } fro
 import { trpc } from "@/lib/trpc";
 import { useLocalAuth } from "@/contexts/LocalAuthContext";
 import { toast } from "sonner";
+import SaaSDisclaimer from "@/components/SaaSDisclaimer";
 
 const plans = [
   {
@@ -119,7 +120,8 @@ export default function Payments() {
             Elige tu Plan
           </h1>
           <p className="text-white/60 text-lg max-w-xl mx-auto">
-            Empieza gratis y escala cuando lo necesites. Sin contratos. Sin sorpresas.
+            Suscripción de software para conductores y flotas de taxi. Sin contratos.
+            Sin sorpresas. La tarifa del viaje siempre es directa entre cliente y conductor.
           </p>
 
           {/* Payment Method Toggle */}
@@ -140,6 +142,11 @@ export default function Payments() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Legal disclaimer */}
+        <div className="mb-8">
+          <SaaSDisclaimer />
         </div>
 
         {/* Plans */}
