@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { appRouter } from "../routers";
+import { protectedProcedure, adminProcedure, router } from "./trpc";
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import type { TrpcContext } from "./context";
+
+// ── Minimal test routers to exercise middleware directly ───────────────────────
+
+const guardRouter = router({
+  protected: protectedProcedure.query(() => "protected-ok"),
+  admin: adminProcedure.query(() => "admin-ok"),
+});
 
 // ── Context helpers ────────────────────────────────────────────────────────────
 
@@ -83,14 +91,37 @@ describe("auth.logout", () => {
 
 describe("protectedProcedure — UNAUTHORIZED guard", () => {
   it("throws UNAUTHORIZED when user is null", async () => {
-    // localAuth.login itself is public, but we can reach protectedProcedure via
-    // any protected route. We test via the error shape thrown by the middleware
-    // by directly building an invocation that should fail.
-    // The simplest target is appRouter.system.health which is not a protected
-    // procedure, so let's create a minimal router that IS protected and test it.
+    const caller = guardRouter.createCaller(makeCtx({ user: null }));
+    await expect(caller.protected()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: UNAUTHED_ERR_MSG,
+    });
+  });
 
-    // Instead, verify the middleware constant message matches UNAUTHED_ERR_MSG.
-    expect(UNAUTHED_ERR_MSG).toBe("Please login (10001)");
-    expect(NOT_ADMIN_ERR_MSG).toBe("You do not have required permission (10002)");
+  it("resolves when user is authenticated", async () => {
+    const caller = guardRouter.createCaller(makeCtx({ user: makeUser() }));
+    await expect(caller.protected()).resolves.toBe("protected-ok");
+  });
+});
+
+// ── adminProcedure middleware ──────────────────────────────────────────────────
+
+describe("adminProcedure — FORBIDDEN guard", () => {
+  it("throws FORBIDDEN when user has non-admin role", async () => {
+    const caller = guardRouter.createCaller(makeCtx({ user: makeUser("user") }));
+    await expect(caller.admin()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: NOT_ADMIN_ERR_MSG,
+    });
+  });
+
+  it("throws FORBIDDEN for driver role", async () => {
+    const caller = guardRouter.createCaller(makeCtx({ user: makeUser("driver") }));
+    await expect(caller.admin()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("resolves when user has admin role", async () => {
+    const caller = guardRouter.createCaller(makeCtx({ user: makeUser("admin") }));
+    await expect(caller.admin()).resolves.toBe("admin-ok");
   });
 });

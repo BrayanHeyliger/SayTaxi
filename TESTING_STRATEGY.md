@@ -24,9 +24,9 @@ Tests for individual procedures that do **not** need a live database. Use `vi.mo
 
 ```
 server/
-  auth.logout.test.ts          ← auth cookie clearing
+  auth.logout.test.ts          ← auth cookie clearing (original test)
   _core/
-    trpc.test.ts               ← auth.me, auth.logout, middleware messages
+    trpc.test.ts               ← auth.me, auth.logout, protectedProcedure, adminProcedure middleware
   routers/
     localAuth.test.ts          ← login validation, hardcoded admin, register input
 ```
