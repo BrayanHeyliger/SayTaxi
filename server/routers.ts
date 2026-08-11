@@ -9,6 +9,7 @@ import { referralsRouter } from "./routers/referrals";
 import { announcementsRouter } from "./routers/announcements";
 import { safetyTipsRouter } from "./routers/safetyTips";
 import { parcelsRouter } from "./routers/parcels";
+import { whatsappRouter } from "./routers/whatsapp";
 
 export const appRouter = router({
   system: systemRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   announcements: announcementsRouter,
   safetyTips: safetyTipsRouter,
   parcels: parcelsRouter,
+  whatsapp: whatsappRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

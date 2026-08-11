@@ -21,6 +21,17 @@ VITE_APP_LOGO=https://tu-dominio.com/logo.png
 NODE_ENV=development
 ```
 
+### WhatsApp Cloud API
+```
+WHATSAPP_BUSINESS_ACCOUNT_ID=xxxxx
+WHATSAPP_PHONE_NUMBER_ID=xxxxx
+WHATSAPP_API_VERSION=v18.0
+WHATSAPP_ACCESS_TOKEN=xxxxx
+WHATSAPP_WEBHOOK_TOKEN=xxxxx
+WHATSAPP_WEBHOOK_URL=https://tu-dominio.com/webhook/whatsapp
+WHATSAPP_APP_SECRET=xxxxx
+```
+
 ## Configuración Opcional
 
 ### Stripe (Pagos)
