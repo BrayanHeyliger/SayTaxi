@@ -1,11 +1,17 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../_core/trpc";
 import Stripe from "stripe";
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
-const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: "2026-07-29.dahlia" })
-  : null;
+function getStripeClient() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+
+  if (!secretKey) {
+    return null;
+  }
+
+  return new Stripe(secretKey, { apiVersion: "2026-07-29.dahlia" });
+}
 
 export const paymentsRouter = router({
   createCheckout: publicProcedure
@@ -15,8 +21,13 @@ export const paymentsRouter = router({
       amount: z.number(),
     }))
     .mutation(async ({ input, ctx }) => {
+      const stripe = getStripeClient();
+
       if (!stripe) {
-        throw new Error("Stripe no está configurado. Define STRIPE_SECRET_KEY para habilitar pagos.");
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "STRIPE_SECRET_KEY no está configurada.",
+        });
       }
 
       const origin = ctx.req.headers.origin || "https://whatsapptaxi-jkudqcvs.manus.space";
@@ -26,8 +37,8 @@ export const paymentsRouter = router({
           price_data: {
             currency: "usd",
             product_data: {
-              name: `Passenger — Plan ${input.planName}`,
-              description: `Suscripción mensual al Plan ${input.planName} de Passenger`,
+              name: `WhatsAppTaxi — Plan ${input.planName}`,
+              description: `Suscripción mensual al Plan ${input.planName} de WhatsApp Taxi SaaS`,
             },
             unit_amount: input.amount * 100,
             recurring: { interval: "month" },

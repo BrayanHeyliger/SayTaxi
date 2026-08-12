@@ -3,34 +3,35 @@
 
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/mascot-icon.svg" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Passenger — Tu viaje, tu elección</title>
-    <meta name="description" content="Plataforma SaaS para empresas de taxi. Recibe pedidos por WhatsApp, gestiona conductores y tarifas. Sin apps adicionales." />
+    <title>Passenger</title>
+    <meta name="description" content="Passenger — Tu viaje, tu elección." />
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
     <!-- iOS PWA support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Passenger" />
-    <link rel="apple-touch-icon" href="/mascot-icon.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
     <!-- Theme color -->
-    <meta name="theme-color" content="#25D366" />
-    <meta name="msapplication-TileColor" content="#25D366" />
+    <meta name="theme-color" content="#111827" />
+    <meta name="msapplication-TileColor" content="#111827" />
     <!-- Leaflet CSS (nativo, sin dependencia de Google Maps) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Fuentes auto-hospedadas: Sora + Inter (sin dependencia de Google Fonts) -->
+    <!-- Fuentes locales por defecto: no dependemos de Manus ni de Google Fonts -->
     <style>
-      @font-face { font-family: 'Sora'; font-weight: 400; font-display: swap; src: url('/assets-storage/sora-400_ce2439f2.ttf') format('truetype'); }
-      @font-face { font-family: 'Sora'; font-weight: 600; font-display: swap; src: url('/assets-storage/sora-600_eafb1d9c.ttf') format('truetype'); }
-      @font-face { font-family: 'Sora'; font-weight: 700; font-display: swap; src: url('/assets-storage/sora-700_44bd5cd4.ttf') format('truetype'); }
-      @font-face { font-family: 'Sora'; font-weight: 800; font-display: swap; src: url('/assets-storage/sora-800_c87f75b7.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 400; font-display: swap; src: url('/assets-storage/inter-400_105f8b52.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 500; font-display: swap; src: url('/assets-storage/inter-500_f0aa8fe1.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 600; font-display: swap; src: url('/assets-storage/inter-600_948ea806.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 700; font-display: swap; src: url('/assets-storage/inter-700_b9dc43c4.ttf') format('truetype'); }
+      :root {
+        --font-heading: "Segoe UI", "Inter", "Arial", sans-serif;
+        --font-body: "Segoe UI", "Inter", "Arial", sans-serif;
+      }
+      html, body {
+        font-family: var(--font-body);
+      }
+      h1, h2, h3, h4, h5, h6 {
+        font-family: var(--font-heading);
+      }
     </style>
   </head>
 
@@ -40,11 +41,31 @@
     <!-- Service Worker registration -->
     <script>
       if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+          .then(regs => Promise.all(regs.map(reg => reg.unregister())))
+          .catch(() => {});
+
+        if ('caches' in window) {
+          caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))).catch(() => {});
+        }
+
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/sw.js?v=4')
             .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
             .catch(err => console.warn('[PWA] SW error:', err));
         });
+      }
+    </script>
+    <script>
+      const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT;
+      const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
+
+      if (analyticsEndpoint && analyticsWebsiteId) {
+        const script = document.createElement('script');
+        script.defer = true;
+        script.src = `${analyticsEndpoint.replace(/\/$/, '')}/umami`;
+        script.dataset.websiteId = analyticsWebsiteId;
+        document.head.appendChild(script);
       }
     </script>
   </body>

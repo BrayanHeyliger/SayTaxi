@@ -2,14 +2,13 @@ import { VehiclesExtrasEditor } from "@/components/VehiclesExtrasEditor";
 import FAQEditor from "@/components/FAQEditor";
 import { AdminParcelStats } from "@/components/AdminParcelStats";
 import { useNotificationHistory } from "@/hooks/useNotificationHistory";
-import GlobalMascotAssistant from "@/components/GlobalMascotAssistant";
-import { useState, useRef, useCallback, useEffect, type ChangeEvent } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import MessagesInbox from "@/components/MessagesInbox";
 import { trpc } from "@/lib/trpc";
 import { useLocalAuth } from "@/contexts/LocalAuthContext";
 import { LanguageSelectorLight } from "@/components/LanguageSelector";
-import { useSiteConfig, DEFAULT_SITE_CONFIG } from "@/contexts/SiteConfigContext";
+import { useSiteConfig } from "@/contexts/SiteConfigContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import LeafletMap, { type LeafletMapRef } from "@/components/LeafletMap";
@@ -28,7 +27,7 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area
 } from "recharts";
 
-type Tab = "overview" | "godsEye" | "drivers" | "clients" | "trips" | "messages" | "permissions" | "editor" | "analytics" | "payments" | "faq" | "settings" | "referrals" | "dispatchers" | "manualBooking" | "surgePricing" | "broadcast" | "safetyTips" | "parcels" | "auditLogs";
+type Tab = "overview" | "godsEye" | "drivers" | "clients" | "trips" | "messages" | "permissions" | "editor" | "analytics" | "payments" | "faq" | "settings" | "referrals" | "dispatchers" | "manualBooking" | "surgePricing" | "broadcast" | "safetyTips" | "parcels";
 type EditorSection = "hero" | "colors" | "contact" | "footer" | "meta" | "features" | "pricing" | "testimonials" | "email" | "vehicles";
 type EditorView = "form" | "preview";
 
@@ -71,16 +70,6 @@ const vehicleData = [
   { name: "Premium", value: 15, color: "#8B5CF6" }, { name: "SUV", value: 10, color: "#F59E0B" },
 ];
 
-const TRIPS_KEY = "wt_pending_trips";
-
-type MarketPulse = {
-  requested: number;
-  accepted: number;
-  inProgress: number;
-  completed: number;
-  total: number;
-};
-
 const statusColors: Record<string, string> = {
   active: "bg-green-100 text-green-700", inactive: "bg-slate-100 text-slate-600",
   suspended: "bg-red-100 text-red-700", pending: "bg-yellow-100 text-yellow-700",
@@ -92,89 +81,27 @@ const statusLabels: Record<string, string> = {
   completed: "Completado", in_progress: "En progreso", cancelled: "Cancelado", requested: "Solicitado",
 };
 
-const LIVE_TRIP_KEY = "wt_live_trip_state";
-
-type LiveTripState = {
-  tripId: string;
-  phase: string;
-  pickup: { lat: number; lng: number; label?: string };
-  driverStart: { lat: number; lng: number; label?: string };
-  driverName: string;
-  updatedAt: number;
-};
-
 const defaultSiteConfig = {
-  siteTitle: "Passenger Admin", tagline: "Gestiona tu experiencia en la plataforma",
-  heroTitle: "Gestiona tu flota desde WhatsApp. Sin apps. Sin complicaciones.",
-  heroDesc: "La plataforma SaaS que convierte WhatsApp en tu central de taxis. Recibe pedidos, asigna conductores y gestiona tarifas — todo desde un bot inteligente.",
-  ctaText: "Empezar gratis", primaryColor: "#25D366", secondaryColor: "#0d1117",
-  accentColor: "#128C7E", fontFamily: "Sora", contactEmail: "soporte@whatsapptaxi.com",
-  contactPhone: "+1 800 TAXI BOT", contactAddress: "Ciudad de México, México",
+  siteTitle: "Passenger", tagline: "Tu viaje, tu elección",
+  heroTitle: "Tu viaje, tu elección en una sola app.",
+  heroDesc: "Reserva tu próxima movilidad con Passenger: conductor cercano, precio claro y viajes sin complicaciones.",
+  ctaText: "Pedir un viaje", primaryColor: "#1DD1A1", secondaryColor: "#0f172a",
+  accentColor: "#10b981", fontFamily: "Sora", contactEmail: "soporte@passenger.app",
+  contactPhone: "+1 800 PASSENGER", contactAddress: "Ciudad de México, México",
   footerText: "© 2025 Passenger. Todos los derechos reservados.",
   footerLinks: "Privacidad | Términos | Soporte",
-  metaDescription: "Plataforma SaaS para empresas de taxi. Recibe pedidos por WhatsApp.",
-  metaKeywords: "taxi, whatsapp, saas, flota, conductor",
+  metaDescription: "Passenger — Tu viaje, tu elección.",
+  metaKeywords: "passenger, taxi, viajes, movilidad, transporte",
   showAnimations: true, showPricing: true, showTestimonials: false,
   maintenanceMode: false, allowRegistration: true, requireEmailVerification: false,
   commissionRate: "20", basefare: "2.50", pricePerKm: "1.20",
   surgePricing: true, surgeMultiplier: "1.5",
   logoUrl: "",
-  footerPages: DEFAULT_SITE_CONFIG.footerPages,
 };
-
-function escapeHtml(input: string) {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function toEditorHtml(value: string) {
-  if (!value) return "";
-  if (value.includes("<") && value.includes(">")) return value;
-  return escapeHtml(value).replace(/\n/g, "<br>");
-}
-
-function RichTextEditor({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  const editorRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!editorRef.current) return;
-    const normalized = toEditorHtml(value || "");
-    if (editorRef.current.innerHTML !== normalized) {
-      editorRef.current.innerHTML = normalized;
-    }
-  }, [value]);
-
-  const applyCommand = (command: string) => {
-    document.execCommand(command, false);
-    onChange(editorRef.current?.innerHTML || "");
-    editorRef.current?.focus();
-  };
-
-  return (
-    <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
-      <div className="flex items-center gap-1 p-2 border-b border-slate-200 bg-slate-50">
-        <button type="button" onClick={() => applyCommand("bold")} className="px-2 py-1 rounded text-xs font-bold text-slate-700 hover:bg-slate-200">B</button>
-        <button type="button" onClick={() => applyCommand("italic")} className="px-2 py-1 rounded text-xs italic text-slate-700 hover:bg-slate-200">I</button>
-        <button type="button" onClick={() => applyCommand("insertUnorderedList")} className="px-2 py-1 rounded text-xs text-slate-700 hover:bg-slate-200">• Lista</button>
-        <button type="button" onClick={() => applyCommand("insertOrderedList")} className="px-2 py-1 rounded text-xs text-slate-700 hover:bg-slate-200">1. Lista</button>
-      </div>
-      <div
-        ref={editorRef}
-        contentEditable
-        onInput={() => onChange(editorRef.current?.innerHTML || "")}
-        className="min-h-[120px] p-3 text-sm text-slate-800 focus:outline-none"
-      />
-    </div>
-  );
-}
 
 export default function AdminDashboard() {
   const { user, isAuthenticated, logout } = useLocalAuth();
-  const [location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [search, setSearch] = useState("");
   const [drivers, setDrivers] = useState<Driver[]>(MOCK_DRIVERS);
@@ -218,113 +145,11 @@ export default function AdminDashboard() {
 
   const [messageForm, setMessageForm] = useState({ to: "all_clients", subject: "", body: "", channel: "push" });
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([
-    { id: "m1", to: "all_clients", subject: "¡Bienvenido a Passenger!", body: "Gracias por registrarte.", channel: "push", date: "Hoy 09:00" },
+    { id: "m1", to: "all_clients", subject: "¡Bienvenido a WhatsApp Taxi!", body: "Gracias por registrarte.", channel: "push", date: "Hoy 09:00" },
     { id: "m2", to: "all_drivers", subject: "Actualización de tarifas", body: "Las tarifas se han actualizado.", channel: "email", date: "Ayer 14:30" },
   ]);
   const [editorSection, setEditorSection] = useState<EditorSection>("hero");
-  const [marketPulse, setMarketPulse] = useState<MarketPulse>({ requested: 0, accepted: 0, inProgress: 0, completed: 0, total: 0 });
-  const [liveTripState, setLiveTripState] = useState<LiveTripState | null>(null);
   const mapRef = useRef<LeafletMapRef | null>(null);
-  const footerImportRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    const syncMarketPulse = () => {
-      try {
-        const trips = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]") as Array<{ status?: string }>;
-        const next = trips.reduce<MarketPulse>((acc, trip) => {
-          acc.total += 1;
-          if (trip.status === "requested") acc.requested += 1;
-          if (trip.status === "accepted") acc.accepted += 1;
-          if (trip.status === "in_progress") acc.inProgress += 1;
-          if (trip.status === "completed") acc.completed += 1;
-          return acc;
-        }, { requested: 0, accepted: 0, inProgress: 0, completed: 0, total: 0 });
-        setMarketPulse(next);
-      } catch {
-        setMarketPulse({ requested: 0, accepted: 0, inProgress: 0, completed: 0, total: 0 });
-      }
-    };
-
-    syncMarketPulse();
-    const syncLiveTrip = () => {
-      try {
-        const raw = localStorage.getItem(LIVE_TRIP_KEY);
-        if (!raw) {
-          setLiveTripState(null);
-          return;
-        }
-        setLiveTripState(JSON.parse(raw));
-      } catch {
-        setLiveTripState(null);
-      }
-    };
-
-    syncLiveTrip();
-    const interval = window.setInterval(syncMarketPulse, 2000);
-    const liveInterval = window.setInterval(syncLiveTrip, 2000);
-    window.addEventListener("storage", syncMarketPulse);
-    window.addEventListener("storage", syncLiveTrip);
-    return () => {
-      window.clearInterval(interval);
-      window.clearInterval(liveInterval);
-      window.removeEventListener("storage", syncMarketPulse);
-      window.removeEventListener("storage", syncLiveTrip);
-    };
-  }, []);
-
-  const handleExportFooterPages = () => {
-    const payload = JSON.stringify((siteConfig as any).footerPages || {}, null, 2);
-    const blob = new Blob([payload], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "footer-pages.json";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-    toast.success("Exportacion de contenido completada ✅");
-  };
-
-  const handleImportFooterPages = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const raw = String(reader.result || "{}");
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          toast.error("JSON invalido. Se esperaba un objeto de paginas.");
-          return;
-        }
-
-        const normalized = Object.entries(parsed).reduce((acc: Record<string, { title: string; content: string }>, [slug, data]) => {
-          const page = data as any;
-          acc[slug] = {
-            title: String(page?.title || slug),
-            content: String(page?.content || ""),
-          };
-          return acc;
-        }, {});
-
-        setSiteConfig(c => ({
-          ...c,
-          footerPages: {
-            ...((c as any).footerPages || {}),
-            ...normalized,
-          },
-        } as any));
-        toast.success("Contenido importado. Recuerda guardar cambios.");
-      } catch {
-        toast.error("No se pudo leer el archivo JSON.");
-      } finally {
-        if (footerImportRef.current) footerImportRef.current.value = "";
-      }
-    };
-    reader.readAsText(file);
-  };
 
   useEffect(() => { if (!isAuthenticated) navigate("/login"); }, [isAuthenticated]);
 
@@ -332,29 +157,7 @@ export default function AdminDashboard() {
     mapRef.current = ref;
     // Spawn animated vehicle markers for all drivers via LeafletMap
     ref.spawnVehicles(19.4326, -99.1332);
-    try {
-      const raw = localStorage.getItem(LIVE_TRIP_KEY);
-      if (raw) {
-        const liveTrip = JSON.parse(raw) as LiveTripState;
-        if (liveTrip?.driverStart && liveTrip?.pickup) {
-          ref.setRouteBetween(
-            { lat: liveTrip.driverStart.lat, lng: liveTrip.driverStart.lng, label: liveTrip.driverName },
-            { lat: liveTrip.pickup.lat, lng: liveTrip.pickup.lng, label: liveTrip.pickup.label || "Cliente" },
-            { vehicleEmoji: "🚕", vehicleLabel: liveTrip.driverName, animate: true }
-          );
-        }
-      }
-    } catch {}
   }, []);
-
-  useEffect(() => {
-    if (activeTab !== "godsEye" || !mapRef.current || !liveTripState?.driverStart || !liveTripState?.pickup) return;
-    mapRef.current.setRouteBetween(
-      { lat: liveTripState.driverStart.lat, lng: liveTripState.driverStart.lng, label: liveTripState.driverName },
-      { lat: liveTripState.pickup.lat, lng: liveTripState.pickup.lng, label: liveTripState.pickup.label || "Cliente" },
-      { vehicleEmoji: "🚕", vehicleLabel: liveTripState.driverName, animate: true }
-    );
-  }, [activeTab, liveTripState]);
 
   const handleDriverAction = (driverId: string, action: "approve" | "suspend" | "activate" | "delete") => {
     setDrivers(prev => prev.map(d => {
@@ -416,50 +219,15 @@ export default function AdminDashboard() {
     { id: "broadcast", label: "Broadcast", icon: Send },
     { id: "safetyTips", label: "Consejos 💡", icon: Lightbulb },
     { id: "parcels", label: "Paquetes 📦", icon: Package },
-    { id: "auditLogs", label: "Auditoria", icon: FileText },
-  ];
-
-  const pendingApprovals = drivers.filter((d) => d.status === "pending").length;
-  const adminMascotMood = pendingApprovals > 0 ? "searching" : marketPulse.inProgress > 0 ? "ready" : "happy";
-  const adminMascotMessages = pendingApprovals > 0
-    ? [
-        `Tienes ${pendingApprovals} conductor(es) pendientes por revisar.`,
-        "Primero valida permisos y documentos criticos.",
-        "Con eso mantienes calidad y cumplimiento legal.",
-      ]
-    : marketPulse.inProgress > 0
-    ? [
-        `Hay ${marketPulse.inProgress} viaje(s) en curso ahora mismo.`,
-        "Monitorea ETA y eventos de seguridad en vivo.",
-        "El panel ya refleja la operacion real de conductores.",
-      ]
-    : [
-        "Tablero estable. Buen momento para optimizar conversion.",
-        "Revisa analytics y ajustes de pricing para crecer margen.",
-        "Estoy listo para guiar la demo con tus clientes.",
-      ];
-
-  const demoOptions = [
-    { href: "/client-dashboard", label: "Cliente", icon: Users },
-    { href: "/driver-dashboard", label: "Conductor", icon: Car },
-    { href: "/fleet-dashboard", label: "Flotilla", icon: Navigation },
-    { href: "/admin", label: "Super Admin", icon: Shield },
   ];
 
   if (!isAuthenticated) return null;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(165deg,_oklch(0.16_0.02_248)_0%,_oklch(0.1_0.018_252)_55%,_oklch(0.085_0.014_255)_100%)] flex">
-      <div className="pointer-events-none absolute inset-0 opacity-75">
-        <div className="absolute -left-28 top-20 h-[380px] w-[380px] rounded-full bg-[radial-gradient(circle,_oklch(0.76_0.18_148/0.2),_transparent_66%)] blur-3xl" />
-        <div className="absolute right-[-180px] top-44 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,_oklch(0.68_0.07_210/0.16),_transparent_68%)] blur-3xl" />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.028)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.024)_1px,transparent_1px)] bg-[size:52px_52px] opacity-15" />
-
+    <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
-      <aside className="relative z-10 h-screen w-64 flex-shrink-0 sticky top-0 border-r border-white/12 bg-slate-950/78 text-white backdrop-blur-xl">
-        <div className="p-5 border-b border-white/12">
+      <aside className="w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 sticky top-0 h-screen">
+        <div className="p-5 border-b border-slate-700">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-xl">🛡️</div>
             <div><p className="font-bold text-sm text-white">Super Admin</p><p className="text-xs text-green-400">Acceso total al sistema</p></div>
@@ -468,7 +236,7 @@ export default function AdminDashboard() {
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {tabs.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === tab.id ? "bg-[linear-gradient(145deg,rgba(16,185,129,0.34),rgba(16,185,129,0.2))] text-white border border-green-300/45 shadow-[0_14px_30px_-20px_rgba(16,185,129,0.95)]" : "text-slate-300 hover:bg-white/8 hover:text-white"}`}>
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${activeTab === tab.id ? "bg-green-500 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
               <tab.icon size={16} />
               <span className="flex-1 text-left">{tab.label}</span>
               {(tab.badge ?? 0) > 0 && <span className="bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{tab.badge}</span>}
@@ -476,42 +244,25 @@ export default function AdminDashboard() {
             </button>
           ))}
         </nav>
-        <div className="p-4 border-t border-white/12">
+        <div className="p-4 border-t border-slate-700">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-sm">{user?.name?.[0] || "A"}</div>
             <div><p className="text-sm font-medium text-white">{user?.name || "Heyliger"}</p><p className="text-xs text-green-400">Super Admin</p></div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => { logout(); navigate("/"); }} className="w-full gap-2 text-slate-200 border-white/20 bg-white/5 hover:bg-white/12 hover:text-white text-xs">
+          <Button variant="outline" size="sm" onClick={() => { logout(); navigate("/"); }} className="w-full gap-2 text-slate-400 border-slate-700 hover:bg-slate-800 hover:text-white text-xs">
             <LogOut size={13} /> Cerrar sesión
           </Button>
         </div>
       </aside>
 
       {/* Main */}
-      <main className="relative z-10 flex-1 overflow-auto bg-slate-50/96 backdrop-blur-sm">
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200/80 bg-white/85 px-6 py-4 backdrop-blur-xl">
+      <main className="flex-1 overflow-auto">
+        <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
           <div>
             <h1 className="text-xl font-bold text-slate-900">{tabs.find(t => t.id === activeTab)?.label}</h1>
             <p className="text-sm text-slate-500">Panel de Super Administrador</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1 shadow-sm">
-              {demoOptions.map((option) => {
-                const Icon = option.icon;
-                const active = location === option.href;
-                return (
-                  <button
-                    key={option.href}
-                    type="button"
-                    onClick={() => navigate(option.href)}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${active ? "bg-[oklch(0.76_0.18_148)] text-[oklch(0.08_0.02_148)] shadow-sm" : "text-slate-600 hover:bg-white hover:text-slate-900"}`}
-                  >
-                    <Icon size={13} />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
             <LanguageSelectorLight />
             <AdminNotificationBell />
             <Button variant="outline" size="sm" className="gap-2 text-sm" onClick={() => navigate("/")}><Home size={14} /> Inicio</Button>
@@ -524,30 +275,6 @@ export default function AdminDashboard() {
           {/* ── OVERVIEW ── */}
           {activeTab === "overview" && (
             <div className="space-y-6">
-              <Card className="border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Passenger en vivo</p>
-                    <h3 className="mt-1 text-lg font-bold text-slate-900">Solicitudes, aceptaciones y viajes activos</h3>
-                    <p className="text-sm text-emerald-900/75">La misma cola que ve el conductor alimenta este panel en tiempo real.</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-                    {[
-                      { label: "Solicitados", value: marketPulse.requested, color: "text-yellow-700" },
-                      { label: "Aceptados", value: marketPulse.accepted, color: "text-blue-700" },
-                      { label: "En curso", value: marketPulse.inProgress, color: "text-emerald-700" },
-                      { label: "Completados", value: marketPulse.completed, color: "text-slate-700" },
-                      { label: "Total", value: marketPulse.total, color: "text-emerald-900" },
-                    ].map((item) => (
-                      <div key={item.label} className="rounded-2xl border border-emerald-200 bg-white px-3 py-2 text-center shadow-sm">
-                        <p className={`text-xl font-extrabold ${item.color}`}>{item.value}</p>
-                        <p className="text-xs text-slate-500">{item.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   { label: "Conductores Activos", value: `${drivers.filter(d => d.status === "active").length}/${drivers.length}`, sub: `${drivers.filter(d => d.online).length} en línea`, icon: Car, color: "text-green-600", bg: "bg-green-50" },
@@ -583,55 +310,6 @@ export default function AdminDashboard() {
                   <div className="space-y-1 mt-2">{vehicleData.map(v => (<div key={v.name} className="flex items-center justify-between text-xs"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ background: v.color }} /><span className="text-slate-600">{v.name}</span></div><span className="font-semibold">{v.value}%</span></div>))}</div>
                 </Card>
               </div>
-
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <Card className="lg:col-span-2 p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="font-semibold text-slate-900">Acciones Rápidas Operativas</h3>
-                    <p className="text-xs text-slate-500">Atajos para soporte y control</p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <button onClick={() => setActiveTab("drivers")} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-slate-100">
-                      <p className="text-sm font-semibold text-slate-900">Revisar conductores</p>
-                      <p className="mt-1 text-xs text-slate-500">Aprobaciones, estado y permisos individuales.</p>
-                    </button>
-                    <button onClick={() => setActiveTab("messages")} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-slate-100">
-                      <p className="text-sm font-semibold text-slate-900">Abrir inbox central</p>
-                      <p className="mt-1 text-xs text-slate-500">Responder incidencias y feedback en minutos.</p>
-                    </button>
-                    <button onClick={() => setActiveTab("broadcast")} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-slate-100">
-                      <p className="text-sm font-semibold text-slate-900">Enviar comunicado</p>
-                      <p className="mt-1 text-xs text-slate-500">Push a pasajeros, conductores o flotillas.</p>
-                    </button>
-                    <button onClick={() => setActiveTab("settings")} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-slate-100">
-                      <p className="text-sm font-semibold text-slate-900">Ajustar configuración</p>
-                      <p className="mt-1 text-xs text-slate-500">Comisión, seguridad, registros y mantenimiento.</p>
-                    </button>
-                  </div>
-                </Card>
-
-                <Card className="p-5">
-                  <h3 className="font-semibold text-slate-900">Salud del Sistema</h3>
-                  <div className="mt-4 space-y-3 text-sm">
-                    <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-                      <span className="text-emerald-800">Cola de viajes</span>
-                      <span className="font-bold text-emerald-700">Estable</span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
-                      <span className="text-blue-800">Panel en vivo</span>
-                      <span className="font-bold text-blue-700">Activo</span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                      <span className="text-amber-800">Riesgo operativo</span>
-                      <span className="font-bold text-amber-700">Moderado</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                    Recomendación: prioriza aprobación de conductores pendientes y revisa señales SOS en la pestaña de mensajes.
-                  </div>
-                </Card>
-              </div>
-
               {drivers.filter(d => d.status === "pending").length > 0 && (
                 <Card className="p-4 border-yellow-200 bg-yellow-50">
                   <div className="flex items-center gap-2">
@@ -1014,80 +692,6 @@ export default function AdminDashboard() {
                     {[{ key: "footerText", label: "Texto del footer (copyright)" }, { key: "footerLinks", label: "Links del footer (separados por |)" }].map(f => (
                       <div key={f.key}><label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label><input type="text" value={(siteConfig as any)[f.key]} onChange={e => setSiteConfig(c => ({ ...c, [f.key]: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" /></div>
                     ))}
-                    <div className="pt-2">
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <p className="text-sm font-semibold text-slate-800">Contenido de paginas del Footer</p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleExportFooterPages}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
-                          >
-                            Exportar JSON
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => footerImportRef.current?.click()}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
-                          >
-                            Importar JSON
-                          </button>
-                          <input
-                            ref={footerImportRef}
-                            type="file"
-                            accept="application/json"
-                            className="hidden"
-                            onChange={handleImportFooterPages}
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-500 mb-3">Estos textos apareceran al entrar en cada enlace del footer.</p>
-                      <div className="space-y-4">
-                        {Object.entries((siteConfig as any).footerPages || {}).map(([slug, page]: [string, any]) => (
-                          <div key={slug} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                              <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Titulo ({slug})</label>
-                                <input
-                                  type="text"
-                                  value={page?.title || ""}
-                                  onChange={e => {
-                                    const current = (siteConfig as any).footerPages || {};
-                                    setSiteConfig(c => ({
-                                      ...c,
-                                      footerPages: {
-                                        ...current,
-                                        [slug]: { ...(current[slug] || {}), title: e.target.value },
-                                      },
-                                    } as any));
-                                  }}
-                                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                                />
-                              </div>
-                              <div className="text-xs text-slate-500 flex items-end pb-2">
-                                URL: /info/{slug}
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">Contenido (editor enriquecido)</label>
-                              <RichTextEditor
-                                value={page?.content || ""}
-                                onChange={(next) => {
-                                  const current = (siteConfig as any).footerPages || {};
-                                  setSiteConfig(c => ({
-                                    ...c,
-                                    footerPages: {
-                                      ...current,
-                                      [slug]: { ...(current[slug] || {}), content: next },
-                                    },
-                                  } as any));
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                     <div className="p-3 bg-slate-900 rounded-xl">
                       <p className="text-white text-xs">{siteConfig.footerText}</p>
                       <div className="flex gap-3 mt-1">{siteConfig.footerLinks.split("|").map((l, i) => <span key={i} className="text-green-400 text-xs cursor-pointer hover:underline">{l.trim()}</span>)}</div>
@@ -1439,49 +1043,6 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* ── AUDIT LOGS ── */}
-          {activeTab === "auditLogs" && (
-            <div className="space-y-5">
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Auditoría de Eventos</h1>
-                <p className="text-sm text-slate-500">Registro administrativo para trazabilidad y compliance.</p>
-              </div>
-              <Card className="overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        {['Hora', 'Actor', 'Módulo', 'Acción', 'Estado'].map((h) => (
-                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {[
-                        { time: 'Hoy 10:42', actor: 'Super Admin', module: 'Conductores', action: 'Aprobó perfil d4', ok: true },
-                        { time: 'Hoy 10:30', actor: 'Sistema', module: 'Broadcast', action: 'Anuncio activo para clientes', ok: true },
-                        { time: 'Hoy 10:14', actor: 'Super Admin', module: 'Pagos', action: 'Actualizó comisión a 20%', ok: true },
-                        { time: 'Hoy 09:58', actor: 'Sistema', module: 'Seguridad', action: 'Intento de acceso bloqueado', ok: false },
-                      ].map((row, i) => (
-                        <tr key={i} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 text-slate-500">{row.time}</td>
-                          <td className="px-4 py-3 font-medium text-slate-900">{row.actor}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.module}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.action}</td>
-                          <td className="px-4 py-3">
-                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                              {row.ok ? 'OK' : 'Alerta'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            </div>
-          )}
-
           {/* ── FAQ EDITOR ── */}
           {activeTab === "faq" && (
             <FAQEditor />
@@ -1513,13 +1074,6 @@ export default function AdminDashboard() {
 
         </div>
       </main>
-
-      <GlobalMascotAssistant
-        storageKey="wt_mascot_admin"
-        title="Asistente Super Admin"
-        mood={adminMascotMood}
-        messages={adminMascotMessages}
-      />
 
       {/* Modal permisos conductor */}
       {editingDriver && (
@@ -1705,8 +1259,8 @@ function ReferralAdminPanel() {
           {/* Original reward cards stats */}
           <div className="grid grid-cols-3 gap-4">
             <Card className="p-4 text-center"><p className="text-2xl font-bold text-slate-900">{allRewards?.length || 0}</p><p className="text-sm text-slate-500">Total recompensas</p></Card>
-            <Card className="p-4 text-center"><p className="text-2xl font-bold text-green-600">{clientRewards.length}</p><p className="text-sm text-slate-500">Clientes</p></Card>
-            <Card className="p-4 text-center"><p className="text-2xl font-bold text-blue-600">{driverRewards.length}</p><p className="text-sm text-slate-500">Conductores</p></Card>
+            <Card className="p-4 text-center"><p className="text-2xl font-bold text-green-600">{clientRewards.length}</p><p className="text-sm text-slate-500">Para clientes</p></Card>
+            <Card className="p-4 text-center"><p className="text-2xl font-bold text-blue-600">{driverRewards.length}</p><p className="text-sm text-slate-500">Para choferes</p></Card>
           </div>
 
           {/* Filter */}

@@ -1,9 +1,13 @@
-const CACHE_NAME = "wataxi-v4";
-const STATIC_ASSETS = ["/", "/login", "/register", "/manifest.json", "/favicon.ico", "/icon-192.png"];
+const CACHE_NAME = "passenger-v1";
+const LEGACY_CACHE_NAMES = ["wataxi-v3", "wataxi-v4", "wataxi-v5", "passenger-v0"];
+const STATIC_ASSETS = ["/", "/login", "/register", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(() => caches.keys())
+      .then((keys) => Promise.all(keys.filter((key) => LEGACY_CACHE_NAMES.includes(key) || key !== CACHE_NAME).map((key) => caches.delete(key))))
   );
   self.skipWaiting();
 });
@@ -11,42 +15,37 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME && LEGACY_CACHE_NAMES.includes(k)).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  if (event.request.url.includes("/api/") || event.request.url.includes("/socket.io")) return;
+  const req = event.request;
+  if (req.method !== "GET") return;
+  if (req.url.includes("/api/") || req.url.includes("/socket.io")) return;
 
-  // For HTML navigations, prefer fresh network response to avoid stale SPA shells.
-  if (event.request.mode === "navigate") {
+  if (req.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
+      fetch(req)
         .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
           return response;
         })
-        .catch(async () => {
-          const cached = await caches.match(event.request);
-          return cached || caches.match("/");
-        })
+        .catch(() => caches.match(req).then((cached) => cached || caches.match("/")))
     );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const networkFetch = fetch(event.request)
+    caches.match(req).then((cached) => {
+      const networkFetch = fetch(req)
         .then((response) => {
           if (response.ok) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
           }
           return response;
         })
@@ -63,13 +62,13 @@ self.addEventListener("push", (event) => {
     body: data.body || "Tienes una nueva notificación",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    tag: data.tag || "wataxi-notif",
+    tag: data.tag || "passenger-notif",
     data: { url: data.url || "/" },
     actions: data.actions || [],
     requireInteraction: data.requireInteraction || false,
   };
   event.waitUntil(
-    self.registration.showNotification(data.title || "Passenger 🚗", options)
+    self.registration.showNotification(data.title || "Passenger 🚕", options)
   );
 });
 
