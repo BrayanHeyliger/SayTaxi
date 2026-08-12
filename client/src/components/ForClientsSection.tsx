@@ -1,161 +1,69 @@
-import { Shield, Star, Clock, CreditCard, MapPin, ThumbsUp, Zap, Heart } from "lucide-react";
+import { ShieldCheck, Wallet, Star, Clock3 } from "lucide-react";
+
+const paymentMethods = ["Efectivo", "Zelle", "Venmo", "Apple Pay", "Google Pay", "Stripe Connect"];
 
 export default function ForClientsSection() {
-  const { lang } = useI18n();
-
-  const copy = {
-    es: {
-      badge: "🚕 Para pasajeros",
-      title: "Tu taxi en minutos.",
-      titleHighlight: "Sin sorpresas. Sin esperas.",
-      sub: "Precios justos, conductores verificados y la comodidad de pedir tu viaje desde donde estés. Así de simple.",
-      benefits: [
-        { title: "Precios que cuidan tu bolsillo", desc: "Tarifas transparentes desde el primer momento. Sabes cuánto pagas antes de subir al taxi." },
-        { title: "Conductores verificados", desc: "Cada conductor pasa por un proceso de verificación de identidad y antecedentes. Tu seguridad primero." },
-        { title: "Llega en 3 a 8 minutos", desc: "Conductores disponibles cerca de ti en todo momento. Sin largas esperas ni excusas." },
-        { title: "Califica tu experiencia", desc: "Tu opinión importa. Califica cada viaje y ayúdanos a mantener el mejor servicio de la ciudad." },
-      ],
-      quote: '"El taxi más rápido que he pedido en mi vida."',
-      quoteAuthor: "— María G., usuaria frecuente",
-      statsLabel: "Lo que dicen nuestros pasajeros",
-      stats: [{ value: "4.9★", label: "Calificación promedio" }, { value: "3 min", label: "Tiempo de llegada" }, { value: "0 contratos", label: "Sin compromisos" }],
-      payLabel: "Acepta todos los métodos de pago",
-      methods: ["💵 Efectivo", "💳 Tarjeta", "📱 Zelle", "🏦 Transferencia", "📲 Pago Móvil"],
-    },
-    en: {
-      badge: "🚕 For passengers",
-      title: "Your taxi in minutes.",
-      titleHighlight: "No surprises. No waiting.",
-      sub: "Fair prices, verified drivers and the convenience of requesting your ride from anywhere. That simple.",
-      benefits: [
-        { title: "Prices that care for your wallet", desc: "Transparent fares from the start. You know what you pay before getting in the taxi." },
-        { title: "Verified drivers", desc: "Every driver goes through an identity and background verification process. Your safety first." },
-        { title: "Arrives in 3 to 8 minutes", desc: "Drivers available near you at all times. No long waits or excuses." },
-        { title: "Rate your experience", desc: "Your opinion matters. Rate every trip and help us maintain the best service in the city." },
-      ],
-      quote: '"The fastest taxi I have ever requested in my life."',
-      quoteAuthor: "— María G., frequent user",
-      statsLabel: "What our passengers say",
-      stats: [{ value: "4.9★", label: "Average rating" }, { value: "3 min", label: "Arrival time" }, { value: "0 contracts", label: "No commitments" }],
-      payLabel: "Accepts all payment methods",
-      methods: ["💵 Cash", "💳 Card", "📱 Zelle", "🏦 Transfer", "📲 Mobile Pay"],
-    },
-    fr: {
-      badge: "🚕 Pour les passagers",
-      title: "Votre taxi en quelques minutes.",
-      titleHighlight: "Sans surprises. Sans attente.",
-      sub: "Des prix justes, des chauffeurs vérifiés et la commodité de demander votre trajet de n'importe où. Aussi simple que ça.",
-      benefits: [
-        { title: "Des prix qui respectent votre budget", desc: "Des tarifs transparents dès le début. Vous savez ce que vous payez avant de monter dans le taxi." },
-        { title: "Chauffeurs vérifiés", desc: "Chaque chauffeur passe par un processus de vérification d'identité et d'antécédents. Votre sécurité d'abord." },
-        { title: "Arrive en 3 à 8 minutes", desc: "Des chauffeurs disponibles près de vous à tout moment. Sans longues attentes ni excuses." },
-        { title: "Évaluez votre expérience", desc: "Votre avis compte. Évaluez chaque trajet et aidez-nous à maintenir le meilleur service de la ville." },
-      ],
-      quote: '"Le taxi le plus rapide que j\'ai jamais commandé de ma vie."',
-      quoteAuthor: "— María G., utilisatrice régulière",
-      statsLabel: "Ce que disent nos passagers",
-      stats: [{ value: "4.9★", label: "Note moyenne" }, { value: "3 min", label: "Temps d'arrivée" }, { value: "0 contrats", label: "Sans engagement" }],
-      payLabel: "Accepte tous les modes de paiement",
-      methods: ["💵 Espèces", "💳 Carte", "📱 Zelle", "🏦 Virement", "📲 Paiement mobile"],
-    },
-  };
-
-  const c = copy[lang as keyof typeof copy] || copy.es;
-
   return (
-    <section id="clientes" className="py-20 lg:py-28" style={{ background: "oklch(0.98 0.005 100)" }}>
+    <section id="clientes" className="py-20 lg:py-28" style={{ background: "linear-gradient(180deg, oklch(0.97 0.004 110), oklch(0.985 0.002 100))" }}>
       <div className="container">
-        {/* Badge */}
-        <div className="flex justify-center mb-4">
-          <span className="inline-flex items-center gap-2 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-widest" style={{ background: "oklch(0.76 0.18 148 / 0.12)", color: "oklch(0.35 0.12 148)" }}>
-            {c.badge}
+        <div className="mx-auto mb-12 max-w-3xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.24em]" style={{ background: "oklch(0.76 0.18 148 / 0.12)", color: "oklch(0.35 0.12 148)" }}>
+            Passenger Marketplace
           </span>
-        </div>
-
-        {/* Headline */}
-        <div className="text-center max-w-2xl mx-auto mb-14">
-          <h2 className="text-3xl lg:text-5xl font-extrabold text-slate-900 leading-tight mb-4" style={{ fontFamily: "'Sora', sans-serif" }}>
-            {c.title}<br />
-            <span style={{ color: "oklch(0.52 0.12 148)" }}>{c.titleHighlight}</span>
+          <h2 className="mt-4 text-3xl font-extrabold leading-tight text-slate-900 lg:text-5xl" style={{ fontFamily: "'Sora', sans-serif" }}>
+            Tu viaje, tu eleccion
           </h2>
-          <p className="text-slate-500 text-lg leading-relaxed">
-            {c.sub}
+          <p className="mt-4 text-lg text-slate-600">
+            Ve conductores verificados en la plataforma y elige con quien viajar. Sin matching automatico obligatorio y sin comisiones ocultas para el pasajero.
           </p>
         </div>
 
-        {/* Benefits grid */}
-        {/* Hero image + benefits layout */}
-        <div className="grid lg:grid-cols-2 gap-12 items-center mb-16">
-          {/* Photo */}
-          <div className="relative rounded-3xl overflow-hidden shadow-2xl aspect-[4/3]">
-            <img
-              src="/manus-storage/landing_clientes_fc4e76ec.jpg"
-              alt="Pasajera feliz usando WhatsApp Taxi"
-              className="w-full h-full object-cover"
-            />
-            {/* Overlay badge */}
-            <div className="absolute bottom-4 left-4 right-4">
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl px-5 py-3 flex items-center gap-3 shadow-lg">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "oklch(0.76 0.18 148 / 0.15)" }}>
-                  <Star size={18} style={{ color: "oklch(0.52 0.12 148)" }} />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Calificación promedio</p>
-                  <p className="font-extrabold text-slate-900">4.9 ★ · +2,400 viajes hoy</p>
-                </div>
-              </div>
+        <div className="mb-10 grid items-stretch gap-8 lg:grid-cols-2">
+          <article className="rounded-[28px] border border-slate-200/80 bg-white p-7 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.35)]">
+            <div className="mb-4 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+              Verificado
             </div>
-          </div>
+            <h3 className="mb-4 text-xl font-bold text-slate-900">Conductores verificados en plataforma</h3>
+            <ul className="space-y-3 text-slate-600">
+              <li className="flex gap-2"><ShieldCheck size={18} className="mt-0.5 text-emerald-600" /> Licencia de conducir vigente verificada</li>
+              <li className="flex gap-2"><ShieldCheck size={18} className="mt-0.5 text-emerald-600" /> Seguro activo y evidencia documental</li>
+              <li className="flex gap-2"><ShieldCheck size={18} className="mt-0.5 text-emerald-600" /> Antecedentes revisados</li>
+              <li className="flex gap-2"><Clock3 size={18} className="mt-0.5 text-blue-600" /> Tiempo estimado de llegada visible antes de solicitar</li>
+            </ul>
+          </article>
 
-          {/* Benefits */}
-          <div className="grid sm:grid-cols-2 gap-5">
-          {[
-            { icon: CreditCard, color: "#25D366", ...c.benefits[0] },
-            { icon: Shield, color: "#3B82F6", ...c.benefits[1] },
-            { icon: Clock, color: "#F59E0B", ...c.benefits[2] },
-            { icon: Star, color: "#8B5CF6", ...c.benefits[3] },
-          ].map(({ icon: Icon, color, title, desc }) => (
-            <div key={title} className="p-6 rounded-2xl border border-slate-100 bg-white hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: color + "18" }}>
-                <Icon size={22} style={{ color }} />
-              </div>
-              <h3 className="font-bold text-slate-900 mb-2 text-base">{title}</h3>
-              <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
+          <article className="rounded-[28px] border border-slate-200/80 bg-white p-7 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.35)]">
+            <div className="mb-4 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+              Pago directo
             </div>
-          ))}
-          </div>
+            <h3 className="mb-4 text-xl font-bold text-slate-900">Pago directo a tu conductor</h3>
+            <p className="mb-4 text-slate-600">El pago del servicio va directamente al conductor independiente.</p>
+            <div className="flex flex-wrap gap-2.5">
+              {paymentMethods.map((method) => (
+                <span key={method} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
+                  {method}
+                </span>
+              ))}
+            </div>
+            <div className="mt-5 inline-flex items-start gap-2 rounded-2xl border border-blue-200/70 bg-blue-50 p-3 text-sm text-blue-900">
+              <Wallet size={16} className="mt-0.5" />
+              Passenger cobra al conductor por suscripción SaaS de uso de plataforma, no por comisión de cada viaje.
+            </div>
+          </article>
         </div>
 
-        {/* Social proof strip */}
-        <div className="rounded-3xl p-8 lg:p-10 flex flex-col lg:flex-row items-center gap-8" style={{ background: "linear-gradient(135deg, oklch(0.10 0.01 250), oklch(0.14 0.02 200))" }}>
-          <div className="flex-1 text-center lg:text-left">
-            <p className="text-white/60 text-sm uppercase tracking-widest font-semibold mb-2">{c.statsLabel}</p>
-            <h3 className="text-2xl lg:text-3xl font-extrabold text-white mb-3" style={{ fontFamily: "'Sora', sans-serif" }}>
-              {c.quote}
+        <div className="flex flex-col items-center justify-between gap-5 rounded-[32px] p-6 lg:flex-row lg:p-8" style={{ background: "linear-gradient(135deg, oklch(0.10 0.01 250), oklch(0.14 0.02 200))" }}>
+          <div>
+            <p className="text-sm text-white/70">Directorio transparente</p>
+            <h3 className="mt-1 text-2xl font-extrabold text-white" style={{ fontFamily: "'Sora', sans-serif" }}>
+              Elige conductor por perfil, tarifa y calificacion
             </h3>
-            <p className="text-white/50 text-sm">{c.quoteAuthor}</p>
           </div>
-          <div className="grid grid-cols-3 gap-6 text-center flex-shrink-0">
-            {[{ value: "4.9★", label: "Calificación promedio" }, { value: "3 min", label: "Tiempo de llegada" }, { value: "0 contratos", label: "Sin compromisos" }].map(s => (
-              <div key={s.label}>
-                <p className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Sora', sans-serif" }}>{s.value}</p>
-                <p className="text-white/50 text-xs mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Payment methods */}
-        <div className="mt-10 text-center">
-          <p className="text-slate-400 text-sm mb-4 font-medium">{c.payLabel}</p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {["💵 Efectivo", "💳 Tarjeta", "📱 Zelle", "🏦 Transferencia", "📲 Pago Móvil"].map(m => (
-              <span key={m} className="px-4 py-2 rounded-full text-sm font-medium border border-slate-200 text-slate-600 bg-white">{m}</span>
-            ))}
-          </div>
+          <a href="/buscar-conductor" className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 font-bold shadow-lg shadow-black/20" style={{ background: "oklch(0.76 0.18 148)", color: "oklch(0.08 0.02 148)" }}>
+            Buscar conductor <Star size={16} />
+          </a>
         </div>
       </div>
     </section>
   );
 }
-import { useI18n } from "@/contexts/I18nContext";

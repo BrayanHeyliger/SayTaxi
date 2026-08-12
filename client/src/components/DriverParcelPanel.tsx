@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2, MapPin, Phone, Clock, DollarSign, CheckCircle, X, Navigation } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { normalizeParcelOrder } from "@/lib/parcelUtils";
 import { toast } from "sonner";
 
 export function DriverParcelPanel() {
@@ -12,6 +13,9 @@ export function DriverParcelPanel() {
   
   const { data: activeOrders, isLoading: loadingActive, refetch: refetchActive } = 
     trpc.parcels.listByDriver.useQuery();
+
+  const normalizedAvailableOrders = ((availableOrders as any[]) || []).map((order) => normalizeParcelOrder(order));
+  const normalizedActiveOrders = ((activeOrders as any[]) || []).map((order) => normalizeParcelOrder(order));
 
   const acceptOrderMutation = trpc.parcels.acceptOrder.useMutation({
     onSuccess: () => {
@@ -90,12 +94,12 @@ export function DriverParcelPanel() {
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-green-500" size={32} />
             </div>
-          ) : (availableOrders as any[])?.length === 0 ? (
+          ) : normalizedAvailableOrders.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-slate-500">No hay paquetes disponibles</p>
             </div>
           ) : (
-            (availableOrders as any[])?.map((order) => (
+            normalizedAvailableOrders.map((order) => (
               <div key={order.id} className="border border-slate-200 rounded-lg p-3 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
@@ -137,12 +141,12 @@ export function DriverParcelPanel() {
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-green-500" size={32} />
             </div>
-          ) : (activeOrders as any[])?.length === 0 ? (
+          ) : normalizedActiveOrders.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-slate-500">No hay entregas activas</p>
             </div>
           ) : (
-            (activeOrders as any[])?.map((order) => (
+            normalizedActiveOrders.map((order) => (
               <div key={order.id} className="border border-slate-200 rounded-lg p-3">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">

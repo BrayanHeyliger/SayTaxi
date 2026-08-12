@@ -1,5 +1,5 @@
 /**
- * TestimonialsSection — WhatsApp Taxi SaaS
+ * TestimonialsSection — Passenger
  * Muestra los testimonios configurados desde el panel admin
  */
 import { useSiteConfig } from "@/contexts/SiteConfigContext";
@@ -22,75 +22,58 @@ export default function TestimonialsSection() {
       />
 
       <div className="container relative z-10">
-        {/* Header */}
-        <div className="text-center mb-14">
+        <div className="mb-14 text-center">
           <div
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-6 border"
+            className="mb-6 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold"
             style={{
               background: "oklch(0.76 0.18 148 / 0.12)",
               borderColor: "oklch(0.76 0.18 148 / 0.3)",
               color: "oklch(0.76 0.18 148)",
             }}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+            <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
             Testimonios
           </div>
-          <h2
-            className="text-3xl lg:text-4xl font-bold text-white mb-4"
-            style={{ fontFamily: `'${config.fontFamily}', sans-serif` }}
-          >
-            Lo que dicen nuestros{" "}
-            <span style={{ color: "oklch(0.76 0.18 148)" }}>clientes</span>
+          <h2 className="mb-4 text-3xl font-bold text-white lg:text-4xl" style={{ fontFamily: `'${config.fontFamily}', sans-serif` }}>
+            Lo que dicen nuestros <span className="text-emerald-300">clientes</span>
           </h2>
-          <p className="text-white/50 text-lg max-w-xl mx-auto">
-            Empresas de taxi que ya transformaron su operación con WhatsApp Taxi SaaS.
+          <p className="mx-auto max-w-2xl text-lg text-white/55">
+            Personas reales, experiencias reales y un servicio que combina confianza, conveniencia y un toque premium.
           </p>
         </div>
 
-        {/* Testimonials Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {testimonials.map((t: any) => (
-            <div
-              key={t.id}
-              className="p-6 rounded-2xl border flex flex-col gap-4 hover:border-green-500/40 transition-colors"
-              style={{
-                background: "oklch(0.14 0.01 250)",
-                borderColor: "oklch(1 0 0 / 0.08)",
-              }}
-            >
-              {/* Stars */}
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map(star => (
-                  <span
-                    key={star}
-                    className="text-lg"
-                    style={{ color: star <= (t.rating || 5) ? "#FBBF24" : "oklch(1 0 0 / 0.15)" }}
-                  >
-                    ★
-                  </span>
-                ))}
-              </div>
-
-              {/* Text */}
-              <p className="text-white/70 text-sm leading-relaxed flex-1">
-                "{t.text}"
-              </p>
-
-              {/* Author */}
-              <div className="flex items-center gap-3 pt-2 border-t" style={{ borderColor: "oklch(1 0 0 / 0.08)" }}>
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                  style={{ background: "oklch(0.76 0.18 148)" }}
-                >
-                  {t.name ? t.name.charAt(0).toUpperCase() : "?"}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {testimonials.map((t: any) => {
+            const avatar = t.avatarUrl || t.avatar || "/assets-storage/avatar1_c813ee08.jpg";
+            return (
+              <div
+                key={t.id}
+                className="flex flex-col gap-4 rounded-[28px] border border-white/10 bg-white/8 p-6 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-md transition hover:-translate-y-1 hover:border-emerald-400/30"
+              >
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <span key={star} className="text-lg" style={{ color: star <= (t.rating || 5) ? "#FBBF24" : "oklch(1 0 0 / 0.15)" }}>
+                      ★
+                    </span>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-white font-semibold text-sm">{t.name || "Cliente"}</p>
-                  <p className="text-white/40 text-xs">{t.company || ""}</p>
+
+                <p className="flex-1 text-sm leading-relaxed text-white/75">"{t.text}"</p>
+
+                <div className="flex items-center gap-3 border-t border-white/10 pt-3">
+                  <img
+                    src={avatar}
+                    alt={t.name || "Cliente"}
+                    className="h-12 w-12 flex-shrink-0 rounded-full border border-white/15 object-cover object-center"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-white">{t.name || "Cliente"}</p>
+                    <p className="text-xs text-white/45">{t.company || "Usuario verificado"}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

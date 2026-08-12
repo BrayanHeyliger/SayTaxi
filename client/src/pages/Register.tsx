@@ -130,7 +130,8 @@ export default function Register() {
 
     // Redirect based on role
     if (role === "driver") {
-      navigate("/driver-dashboard");
+      // Send new drivers to the onboarding wizard to complete verification
+      navigate("/driver-onboarding");
     } else if (role === "fleet") {
       navigate("/fleet-dashboard");
     } else {
@@ -139,17 +140,33 @@ export default function Register() {
     }
   };
 
-  const inputClass = (accent = "green") =>
-    `w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/30 focus:ring-2 focus:ring-${accent}-500 focus:border-transparent outline-none`;
+  const inputClass = (accent: "green" | "blue" | "indigo" = "green") => {
+    const accentClass =
+      accent === "blue"
+        ? "focus:border-blue-300/60 focus:ring-blue-400/30"
+        : accent === "indigo"
+          ? "focus:border-indigo-300/60 focus:ring-indigo-400/30"
+          : "focus:border-green-300/60 focus:ring-green-400/30";
+
+    return `w-full rounded-xl border border-white/18 bg-black/28 px-3.5 py-2.5 text-white placeholder-white/45 outline-none transition-all focus:bg-black/35 focus:ring-2 ${accentClass}`;
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[oklch(0.13_0.01_250)] to-[oklch(0.08_0.02_250)] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-lg">
+    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(165deg,_oklch(0.16_0.02_248)_0%,_oklch(0.1_0.018_252)_55%,_oklch(0.085_0.014_255)_100%)] px-4 py-12">
+      <div className="pointer-events-none absolute inset-0 opacity-80">
+        <div className="absolute -left-20 -top-24 h-80 w-80 rounded-full bg-[radial-gradient(circle,_oklch(0.76_0.18_148/0.26),_transparent_66%)] blur-2xl" />
+        <div className="absolute -right-28 top-8 h-96 w-96 rounded-full bg-[radial-gradient(circle,_oklch(0.68_0.07_210/0.22),_transparent_68%)] blur-3xl" />
+        <div className="absolute bottom-[-140px] left-1/2 h-[380px] w-[620px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,_oklch(0.82_0.03_145/0.16),_transparent_70%)] blur-3xl" />
+      </div>
+
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:48px_48px] opacity-20" />
+
+      <div className="relative mx-auto w-full max-w-3xl">
         {/* Logo */}
         <div className="text-center mb-8">
-          <a href="/" className="inline-flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-green-500/20">
-              <img src="/manus-storage/logo-icon_34950e08.png" alt="Logo" className="w-full h-full object-cover" style={{ background: "oklch(0.76 0.18 148)" }} />
+          <a href="/" className="inline-flex items-center gap-3 transition-transform hover:scale-105">
+            <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-green-500/20 ring-1 ring-white/10">
+              <img src="/assets-storage/logo-icon_34950e08.png" alt="Logo" className="w-full h-full object-cover" style={{ background: "oklch(0.76 0.18 148)" }} />
             </div>
             <span className="text-white font-bold text-xl" style={{ fontFamily: "'Sora', sans-serif" }}>
               WhatsApp<span className="text-[oklch(0.76_0.18_148)]">Taxi</span>
@@ -161,11 +178,14 @@ export default function Register() {
         {registerType === "select" && (
           <div className="space-y-6">
             <div className="text-center">
-              <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: "'Sora', sans-serif" }}>Crear Cuenta</h1>
-              <p className="text-white/60">Selecciona cómo quieres registrarte</p>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-green-300/35 bg-green-300/10 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-green-200">
+                Crear perfil
+              </div>
+              <h1 className="mb-2 text-4xl font-bold tracking-tight text-white" style={{ fontFamily: "'Sora', sans-serif" }}>Crear Cuenta</h1>
+              <p className="text-white/65">Selecciona cómo quieres registrarte</p>
             </div>
             {pendingTrip && (
-              <div className="p-4 rounded-2xl flex items-center gap-3" style={{ background: "oklch(0.76 0.18 148 / 0.12)", border: "1px solid oklch(0.76 0.18 148 / 0.3)" }}>
+              <div className="rounded-2xl border border-green-300/30 bg-[linear-gradient(145deg,rgba(16,185,129,0.18),rgba(16,185,129,0.05))] p-4 flex items-center gap-3">
                 <div className="text-2xl flex-shrink-0">🚕</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-semibold text-sm">Viaje pendiente de confirmar</p>
@@ -176,47 +196,47 @@ export default function Register() {
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Card className="p-6 cursor-pointer border-2 border-transparent hover:border-green-500/50 bg-white/5 backdrop-blur-sm transition-all hover:scale-[1.02]" onClick={() => setRegisterType("client")}>
+              <Card className="group cursor-pointer rounded-3xl border border-white/12 bg-slate-950/70 p-6 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-green-300/40 hover:shadow-[0_20px_45px_-25px_rgba(16,185,129,0.9)]" onClick={() => setRegisterType("client")}>
                 <div className="text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-lg shadow-green-500/20">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-green-400 to-green-600 shadow-lg shadow-green-500/20 transition-transform duration-300 group-hover:scale-105">
                     <User size={28} className="text-white" />
                   </div>
                   <div>
                     <h3 className="text-white font-bold text-lg">Soy Cliente</h3>
-                    <p className="text-white/50 text-sm mt-1">Quiero pedir taxis</p>
+                    <p className="text-white/55 text-sm mt-1">Quiero pedir taxis</p>
                   </div>
-                  <Button className="w-full bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30">Registrarme</Button>
+                  <Button className="w-full rounded-xl border border-green-300/45 bg-[linear-gradient(145deg,rgba(16,185,129,0.3),rgba(16,185,129,0.14))] font-semibold text-green-100 shadow-[0_14px_28px_-20px_rgba(16,185,129,0.9)] transition-all hover:border-green-200/70 hover:bg-[linear-gradient(145deg,rgba(16,185,129,0.42),rgba(16,185,129,0.22))]">Registrarme</Button>
                 </div>
               </Card>
-              <Card className="p-6 cursor-pointer border-2 border-transparent hover:border-blue-500/50 bg-white/5 backdrop-blur-sm transition-all hover:scale-[1.02]" onClick={() => setRegisterType("driver")}>
+              <Card className="group cursor-pointer rounded-3xl border border-white/12 bg-slate-950/70 p-6 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-blue-300/40 hover:shadow-[0_20px_45px_-25px_rgba(59,130,246,0.85)]" onClick={() => setRegisterType("driver")}>
                 <div className="text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg shadow-blue-500/20 transition-transform duration-300 group-hover:scale-105">
                     <Car size={28} className="text-white" />
                   </div>
                   <div>
                     <h3 className="text-white font-bold text-lg">Soy Conductor</h3>
-                    <p className="text-white/50 text-sm mt-1">Quiero ganar dinero</p>
+                    <p className="text-white/55 text-sm mt-1">Quiero ganar dinero</p>
                   </div>
-                  <Button className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30">Registrarme</Button>
+                  <Button className="w-full rounded-xl border border-blue-300/45 bg-[linear-gradient(145deg,rgba(59,130,246,0.28),rgba(59,130,246,0.12))] font-semibold text-blue-100 shadow-[0_14px_28px_-20px_rgba(59,130,246,0.9)] transition-all hover:border-blue-200/70 hover:bg-[linear-gradient(145deg,rgba(59,130,246,0.4),rgba(59,130,246,0.2))]">Registrarme</Button>
                 </div>
               </Card>
-              <Card className="p-6 cursor-pointer border-2 border-transparent hover:border-indigo-500/50 bg-white/5 backdrop-blur-sm transition-all hover:scale-[1.02]" onClick={() => setRegisterType("fleet")}>
+              <Card className="group cursor-pointer rounded-3xl border border-white/12 bg-slate-950/70 p-6 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300/45 hover:shadow-[0_20px_45px_-25px_rgba(99,102,241,0.85)]" onClick={() => setRegisterType("fleet")}>
                 <div className="text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 shadow-lg shadow-indigo-500/20 transition-transform duration-300 group-hover:scale-105">
                     <Building2 size={28} className="text-white" />
                   </div>
                   <div>
                     <h3 className="text-white font-bold text-lg">Soy Empresa</h3>
-                    <p className="text-white/50 text-sm mt-1">Gestionar flotilla</p>
+                    <p className="text-white/55 text-sm mt-1">Gestionar flotilla</p>
                   </div>
-                  <Button className="w-full bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 border border-indigo-500/30">Registrarme</Button>
+                  <Button className="w-full rounded-xl border border-indigo-300/45 bg-[linear-gradient(145deg,rgba(99,102,241,0.28),rgba(99,102,241,0.12))] font-semibold text-indigo-100 shadow-[0_14px_28px_-20px_rgba(99,102,241,0.9)] transition-all hover:border-indigo-200/70 hover:bg-[linear-gradient(145deg,rgba(99,102,241,0.4),rgba(99,102,241,0.2))]">Registrarme</Button>
                 </div>
               </Card>
             </div>
             <div className="text-center pt-2">
-              <p className="text-white/50 text-sm">
+              <p className="text-white/60 text-sm">
                 ¿Ya tienes cuenta?{" "}
-                <a href="/login" className="text-[oklch(0.76_0.18_148)] hover:underline font-medium">Iniciar Sesión</a>
+                <a href="/login" className="inline-flex items-center rounded-lg border border-emerald-300/45 bg-emerald-300/10 px-3 py-1.5 font-semibold text-[oklch(0.76_0.18_148)] transition-all hover:border-emerald-200/70 hover:bg-emerald-300/16">Iniciar Sesión</a>
               </p>
             </div>
             <div className="text-center">
@@ -229,20 +249,22 @@ export default function Register() {
 
         {/* Formulario */}
         {registerType !== "select" && (
-          <Card className="p-8 bg-white/5 backdrop-blur-sm border border-white/10">
-            <button onClick={() => { setRegisterType("select"); setError(""); }} className="flex items-center gap-2 text-white/50 hover:text-white text-sm mb-6 transition-colors">
+          <Card className="relative overflow-hidden rounded-3xl border border-white/12 bg-slate-950/72 p-7 backdrop-blur-2xl shadow-[0_28px_90px_-36px_rgba(3,8,20,0.9)] sm:p-8">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_56%)]" />
+
+            <button onClick={() => { setRegisterType("select"); setError(""); }} className="relative mb-6 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition-all hover:border-white/30 hover:text-white">
               <ArrowLeft size={14} /> Volver
             </button>
 
-            <div className="flex items-center gap-3 mb-6">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${registerType === "client" ? "bg-gradient-to-br from-green-400 to-green-600" : registerType === "driver" ? "bg-gradient-to-br from-blue-400 to-blue-600" : "bg-gradient-to-br from-indigo-400 to-indigo-600"}`}>
+            <div className="relative flex items-center gap-3 mb-6">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${registerType === "client" ? "bg-gradient-to-br from-green-400 to-green-600" : registerType === "driver" ? "bg-gradient-to-br from-blue-400 to-blue-600" : "bg-gradient-to-br from-indigo-400 to-indigo-600"}`}>
                 {registerType === "client" ? <User size={20} className="text-white" /> : registerType === "driver" ? <Car size={20} className="text-white" /> : <Building2 size={20} className="text-white" />}
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-xl font-bold tracking-tight text-white">
                   {registerType === "client" ? "Registro de Cliente" : registerType === "driver" ? "Registro de Conductor" : "Registro de Empresa"}
                 </h2>
-                <p className="text-white/50 text-sm">Completa tus datos</p>
+                <p className="text-white/60 text-sm">Completa tus datos</p>
               </div>
             </div>
 
@@ -253,49 +275,49 @@ export default function Register() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-white/70 text-sm mb-1">Nombre *</label>
+                  <label className="block text-white/82 text-sm font-medium mb-1.5">Nombre *</label>
                   <input type="text" name="firstName" value={formData.firstName} onChange={handleInputChange} required className={inputClass()} placeholder="Tu nombre" />
                 </div>
                 <div>
-                  <label className="block text-white/70 text-sm mb-1">Apellido</label>
+                  <label className="block text-white/82 text-sm font-medium mb-1.5">Apellido</label>
                   <input type="text" name="lastName" value={formData.lastName} onChange={handleInputChange} className={inputClass()} placeholder="Tu apellido" />
                 </div>
               </div>
 
               {registerType === "fleet" && (
                 <div>
-                  <label className="block text-white/70 text-sm mb-1"><Building2 size={14} className="inline mr-1" /> Nombre de la Empresa *</label>
+                  <label className="block text-white/82 text-sm font-medium mb-1.5"><Building2 size={14} className="inline mr-1" /> Nombre de la Empresa *</label>
                   <input type="text" name="companyName" value={formData.companyName} onChange={handleInputChange} required className={inputClass("indigo")} placeholder="Mi Empresa de Taxis" />
                 </div>
               )}
 
               <div>
-                <label className="block text-white/70 text-sm mb-1"><Mail size={14} className="inline mr-1" /> Email *</label>
+                <label className="block text-white/82 text-sm font-medium mb-1.5"><Mail size={14} className="inline mr-1" /> Email *</label>
                 <input type="email" name="email" value={formData.email} onChange={handleInputChange} required autoComplete="email" className={inputClass()} placeholder="tu@email.com" />
               </div>
 
               <div>
-                <label className="block text-white/70 text-sm mb-1"><Phone size={14} className="inline mr-1" /> Teléfono *</label>
+                <label className="block text-white/82 text-sm font-medium mb-1.5"><Phone size={14} className="inline mr-1" /> Teléfono *</label>
                 <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} required className={inputClass()} placeholder="+1 234 567 8900" />
               </div>
 
               {registerType === "driver" && (
                 <>
                   <div>
-                    <label className="block text-white/70 text-sm mb-1"><FileText size={14} className="inline mr-1" /> Número de Licencia *</label>
+                    <label className="block text-white/82 text-sm font-medium mb-1.5"><FileText size={14} className="inline mr-1" /> Número de Licencia *</label>
                     <input type="text" name="licenseNumber" value={formData.licenseNumber} onChange={handleInputChange} required className={inputClass("blue")} placeholder="DL-123456" />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-white/70 text-sm mb-1">Marca *</label>
+                      <label className="block text-white/82 text-sm font-medium mb-1.5">Marca *</label>
                       <input type="text" name="vehicleMake" value={formData.vehicleMake} onChange={handleInputChange} required className={inputClass("blue")} placeholder="Toyota" />
                     </div>
                     <div>
-                      <label className="block text-white/70 text-sm mb-1">Modelo *</label>
+                      <label className="block text-white/82 text-sm font-medium mb-1.5">Modelo *</label>
                       <input type="text" name="vehicleModel" value={formData.vehicleModel} onChange={handleInputChange} required className={inputClass("blue")} placeholder="Corolla" />
                     </div>
                     <div>
-                      <label className="block text-white/70 text-sm mb-1">Placa *</label>
+                      <label className="block text-white/82 text-sm font-medium mb-1.5">Placa *</label>
                       <input type="text" name="vehiclePlate" value={formData.vehiclePlate} onChange={handleInputChange} required className={inputClass("blue")} placeholder="ABC-123" />
                     </div>
                   </div>
@@ -303,23 +325,23 @@ export default function Register() {
               )}
 
               <div>
-                <label className="block text-white/70 text-sm mb-1"><Lock size={14} className="inline mr-1" /> Contraseña *</label>
+                <label className="block text-white/82 text-sm font-medium mb-1.5"><Lock size={14} className="inline mr-1" /> Contraseña *</label>
                 <div className="relative">
                   <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleInputChange} required autoComplete="new-password" className={`${inputClass()} pr-12`} placeholder="Mínimo 6 caracteres" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white">
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-white/70 text-sm mb-1"><Lock size={14} className="inline mr-1" /> Confirmar Contraseña *</label>
+                <label className="block text-white/82 text-sm font-medium mb-1.5"><Lock size={14} className="inline mr-1" /> Confirmar Contraseña *</label>
                 <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} required autoComplete="new-password" className={inputClass()} placeholder="Repite tu contraseña" />
               </div>
 
               {/* Referral code field */}
               <div>
-                <label className="block text-white/70 text-sm mb-1">
+                <label className="block text-white/82 text-sm font-medium mb-1.5">
                   <span className="mr-1">🎁</span> Código de referido <span className="text-white/30 text-xs">(opcional)</span>
                 </label>
                 <input
@@ -339,7 +361,7 @@ export default function Register() {
               <Button
                 type="submit"
                 disabled={loading}
-                className={`w-full py-3 font-semibold text-base shadow-lg mt-2 ${registerType === "driver" ? "bg-blue-600 hover:bg-blue-700 text-white" : registerType === "fleet" ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}`}
+                className={`mt-2 w-full rounded-xl py-3 text-base font-semibold shadow-[0_20px_44px_-20px_rgba(16,185,129,0.9)] transition-all hover:-translate-y-0.5 ${registerType === "driver" ? "bg-blue-600 text-white hover:bg-blue-500 shadow-[0_20px_44px_-20px_rgba(59,130,246,0.95)]" : registerType === "fleet" ? "bg-indigo-600 text-white hover:bg-indigo-500 shadow-[0_20px_44px_-20px_rgba(99,102,241,0.95)]" : ""}`}
                 style={registerType === "client" ? { background: "oklch(0.76 0.18 148)", color: "oklch(0.08 0.02 148)" } : {}}
               >
                 {loading ? "Registrando..." : `Crear Cuenta ${registerType === "client" ? "de Cliente" : registerType === "driver" ? "de Conductor" : "de Empresa"}`}

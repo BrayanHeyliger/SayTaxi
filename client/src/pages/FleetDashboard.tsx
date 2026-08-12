@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
+import GlobalMascotAssistant from "@/components/GlobalMascotAssistant";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
@@ -147,6 +148,27 @@ export default function FleetDashboard() {
     { id: "analytics", label: "Analytics", icon: TrendingUp },
     { id: "settings", label: "Config", icon: Settings },
   ];
+
+  const pendingApprovals = drivers.filter((d) => d.status === "pending").length;
+  const fleetMascotMood = pendingApprovals > 0 ? "searching" : activeTab === "overview" ? "happy" : "ready";
+  const fleetMascotMessages =
+    pendingApprovals > 0
+      ? [
+          `Tienes ${pendingApprovals} conductor(es) pendientes por aprobar.`,
+          "Revisa documentos antes de activar perfiles.",
+          "Responder rapido mejora la oferta activa en tu flotilla.",
+        ]
+      : activeTab === "overview"
+      ? [
+          "Vista general lista con tus KPIs clave.",
+          "Tu operacion se ve saludable y estable.",
+          "Vamos por una conversion mas alta hoy.",
+        ]
+      : [
+          "Estoy monitoreando tu operacion en tiempo real.",
+          "Cualquier ajuste impacta toda la experiencia.",
+          "Te ayudo a mantener estandar premium.",
+        ];
 
   if (!isAuthenticated) return null;
 
@@ -611,6 +633,12 @@ export default function FleetDashboard() {
           </Card>
         </div>
       )}
+      <GlobalMascotAssistant
+        storageKey="wt_mascot_fleet"
+        title="Asistente Flotilla"
+        mood={fleetMascotMood}
+        messages={fleetMascotMessages}
+      />
       <SafetyTipsButton audience="fleet" />
     </div>
   );

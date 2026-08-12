@@ -34,6 +34,14 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
 
   const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
 
+  const supportsWebRTC =
+    typeof window !== "undefined" &&
+    typeof window.RTCPeerConnection !== "undefined" &&
+    typeof window.RTCSessionDescription !== "undefined" &&
+    typeof window.RTCIceCandidate !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia;
+
   const closePeer = useCallback(() => {
     peerRef.current?.close();
     peerRef.current = null;
@@ -45,6 +53,10 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
   }, []);
 
   const createPeer = useCallback(() => {
+    if (!supportsWebRTC) {
+      throw new Error("WebRTC is not available in this browser");
+    }
+
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pc.onicecandidate = (e) => {
       if (e.candidate && socketRef.current && roomId) {
@@ -60,10 +72,14 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
     };
     peerRef.current = pc;
     return pc;
-  }, [roomId, userId]);
+  }, [roomId, userId, supportsWebRTC]);
 
   const startCall = useCallback(async (callerName: string) => {
     if (!socketRef.current || !roomId) return;
+    if (!supportsWebRTC) {
+      throw new Error("WebRTC is not available");
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       localStreamRef.current = stream;
@@ -77,10 +93,14 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
       console.error("[WebRTC] startCall error:", e);
       setCallState("idle");
     }
-  }, [roomId, userId, createPeer]);
+  }, [roomId, userId, createPeer, supportsWebRTC]);
 
   const answerCall = useCallback(async (offer: RTCSessionDescriptionInit) => {
     if (!socketRef.current || !roomId) return;
+    if (!supportsWebRTC) {
+      throw new Error("WebRTC is not available");
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       localStreamRef.current = stream;
@@ -95,7 +115,7 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
       console.error("[WebRTC] answerCall error:", e);
       setCallState("idle");
     }
-  }, [roomId, userId, createPeer]);
+  }, [roomId, userId, createPeer, supportsWebRTC]);
 
   const endCall = useCallback(() => {
     if (socketRef.current && roomId) {
@@ -123,6 +143,10 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
     const socket = io(window.location.origin, {
       path: "/socket.io",
       transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5_000,
     });
 
     socketRef.current = socket;
@@ -133,6 +157,11 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
     });
 
     socket.on("disconnect", () => setIsConnected(false));
+
+    socket.on("connect_error", (error) => {
+      setIsConnected(false);
+      console.error("[Socket.io] connection error:", error);
+    });
 
     socket.on("message_history", (history: ChatMessage[]) => {
       setMessages(history);
@@ -159,15 +188,23 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
     });
 
     socket.on("call_answered", async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
-      if (peerRef.current) {
+      if (!peerRef.current || !answer) return;
+      try {
         await peerRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         setCallState("active");
+      } catch (error) {
+        console.error("[WebRTC] call_answered error:", error);
+        closePeer();
+        setCallState("idle");
       }
     });
 
     socket.on("call_ice_candidate", async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
-      if (peerRef.current) {
-        try { await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      if (!peerRef.current || !candidate) return;
+      try {
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (error) {
+        console.error("[WebRTC] addIceCandidate error:", error);
       }
     });
 
@@ -187,6 +224,11 @@ export function useSocket({ roomId, userId, role, enabled = true }: UseSocketOpt
       socketRef.current = null;
       setIsConnected(false);
       setMessages([]);
+      setTypingUser(null);
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
       closePeer();
     };
   }, [roomId, userId, role, enabled, closePeer]);

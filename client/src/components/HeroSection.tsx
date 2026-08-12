@@ -2,7 +2,7 @@
  * HeroSection — 100% nativo: Leaflet + OpenStreetMap + Nominatim
  * Sin dependencia de Google Maps
  */
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Navigation, Clock, ChevronRight, Shield, Zap, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { useSiteConfig } from "@/contexts/SiteConfigContext";
@@ -10,6 +10,9 @@ import { useLocalAuth } from "@/contexts/LocalAuthContext";
 import LeafletMap, { type LeafletMapRef } from "@/components/LeafletMap";
 import NominatimAutocomplete from "@/components/NominatimAutocomplete";
 import { HeroParcelForm } from "@/components/HeroParcelForm";
+import PassengerMascot from "@/components/PassengerMascot";
+import type { ParcelFormData } from "@/components/HeroParcelForm";
+import { trpc } from "@/lib/trpc";
 
 const VEHICLES = [
   { id: "economy", label: "Económico", emoji: "🚗", base: 6,  perKm: 0.9, eta: "3 min", seats: 4 },
@@ -69,6 +72,20 @@ export default function HeroSection() {
   const [regLoading, setRegLoading]   = useState(false);
   const [regError, setRegError]       = useState("");
   const [serviceType, setServiceType] = useState<"trip" | "parcel">("trip");
+  const [heroMascotStep, setHeroMascotStep] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setHeroMascotStep((prev) => (prev + 1) % 3);
+    }, 2300);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const createParcelMutation = trpc.parcels.create.useMutation({
+    onError: () => {
+      // silent fallback — parcel stored locally without toast
+    },
+  });
 
   const handleMapReady = useCallback((ref: LeafletMapRef) => {
     mapRef.current = ref;
@@ -182,6 +199,61 @@ export default function HeroSection() {
     }
   };
 
+  const handleParcelSubmit = (data: ParcelFormData) => {
+    const persistOrder = (trackingCode: string) => {
+      const order = {
+        id: `parcel-${Date.now()}`,
+        trackingCode,
+        pickupAddress: data.pickupAddress,
+        pickupLat: data.pickupLat,
+        pickupLng: data.pickupLng,
+        dropoffAddress: data.dropoffAddress,
+        dropoffLat: data.dropoffLat,
+        dropoffLng: data.dropoffLng,
+        status: "pending" as const,
+        estimatedPrice: data.estimatedPrice,
+        actualPrice: data.estimatedPrice,
+        createdAt: new Date().toISOString(),
+        packageType: data.packageType,
+        weight: data.weight,
+        description: data.description,
+      };
+
+      const previousOrders = JSON.parse(sessionStorage.getItem("wt_parcel_orders") || "[]");
+      sessionStorage.setItem("wt_parcel_orders", JSON.stringify([order, ...previousOrders]));
+    };
+
+    if (isAuthenticated) {
+      createParcelMutation.mutate(
+        {
+          pickupAddress: data.pickupAddress,
+          pickupLat: data.pickupLat,
+          pickupLng: data.pickupLng,
+          dropoffAddress: data.dropoffAddress,
+          dropoffLat: data.dropoffLat,
+          dropoffLng: data.dropoffLng,
+          packageType: data.packageType,
+          weight: data.weight,
+          description: data.description,
+          estimatedPrice: data.estimatedPrice,
+        },
+        {
+          onSuccess: (result) => {
+            persistOrder(result.trackingCode);
+            navigate("/client-dashboard?tab=parcels");
+          },
+          onError: () => {
+            persistOrder(`WT${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
+            navigate("/client-dashboard?tab=parcels");
+          },
+        }
+      );
+      return;
+    }
+
+    persistOrder(`WT${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegLoading(true); setRegError("");
@@ -205,46 +277,76 @@ export default function HeroSection() {
 
   return (
     <section className="relative w-full flex flex-col pt-16 overflow-x-hidden" style={{ background: "linear-gradient(135deg, oklch(0.10 0.01 250) 0%, oklch(0.14 0.02 200) 100%)" }}>
-      {/* Background glow */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl" style={{ background: "oklch(0.76 0.18 148)" }} />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full opacity-8 blur-3xl" style={{ background: "oklch(0.52 0.12 148)" }} />
+        <div className="absolute top-1/4 left-1/4 h-64 w-64 rounded-full opacity-8 blur-2xl sm:h-96 sm:w-96 sm:opacity-10 sm:blur-3xl" style={{ background: "oklch(0.76 0.18 148)" }} />
+        <div className="absolute bottom-1/4 right-1/4 h-48 w-48 rounded-full opacity-7 blur-2xl sm:h-64 sm:w-64 sm:opacity-8 sm:blur-3xl" style={{ background: "oklch(0.52 0.12 148)" }} />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.12),_transparent_40%)]" />
       </div>
 
       <div className="container relative z-10 py-6 pb-10 lg:py-16">
         <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 lg:gap-16 lg:items-start">
-
-          {/* Left: Copy */}
-          <div className="order-2 lg:order-1 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5" style={{ background: "oklch(0.76 0.18 148 / 0.15)", color: "oklch(0.76 0.18 148)" }}>
-              <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "oklch(0.76 0.18 148)" }} />
+          <div className="order-2 lg:order-1 text-center lg:text-left motion-safe:animate-fade-up">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200 backdrop-blur">
+              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
               Conductores disponibles ahora
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-[1.1] mb-4" style={{ fontFamily: "'Sora', sans-serif" }}>
-              Tu taxi,<br /><span style={{ color: "oklch(0.76 0.18 148)" }}>en minutos.</span>
+            <h1 className="mb-4 mt-6 text-4xl font-extrabold leading-[1.08] text-white sm:text-5xl lg:text-6xl" style={{ fontFamily: "'Sora', sans-serif" }}>
+              Conecta con<br /><span className="text-emerald-300">conductores locales verificados.</span>
             </h1>
-            <p className="text-white/60 text-lg mb-6 leading-relaxed max-w-md mx-auto lg:mx-0">
-              Sin apps, sin complicaciones. Solo dinos dónde estás y a dónde vas.
+            <p className="mx-auto mb-6 max-w-xl text-lg leading-relaxed text-white/70 lg:mx-0">
+              Elige quien te lleva, ve tiempos reales y reserva con confianza desde una experiencia premium y transparente.
             </p>
-            <div className="flex flex-col gap-2 mb-6 items-center lg:items-start">
+            <div className="mb-6 rounded-3xl border border-white/12 bg-white/8 p-4 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <PassengerMascot
+                  mood={heroMascotStep === 0 ? "searching" : heroMascotStep === 1 ? "ready" : "happy"}
+                  size="sm"
+                  animated
+                />
+                <div className="text-left">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">Asistente Passenger</p>
+                  <p className="text-sm text-white/80">
+                    {heroMascotStep === 0 && "Buscando el mejor carro cerca de ti..."}
+                    {heroMascotStep === 1 && "Conductor ideal detectado. Preparando ruta."}
+                    {heroMascotStep === 2 && "Todo listo: vamos camino al carro."}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 h-8 overflow-hidden rounded-full border border-emerald-300/25 bg-black/25 px-3">
+                <div className="flex h-full items-center gap-2 whitespace-nowrap text-xs text-emerald-100 animate-mascot-walk">
+                  <span>🚕</span>
+                  <span>Camino al punto de recogida</span>
+                </div>
+              </div>
+            </div>
+            <div className="mb-6 flex flex-col items-center gap-3 lg:items-start">
               {[{ icon: Shield, text: "Conductores verificados" }, { icon: Zap, text: "Llegada en 3-8 min" }].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-2 text-white/60 text-sm">
-                  <Icon size={15} style={{ color: "oklch(0.76 0.18 148)" }} /> {text}
+                <div key={text} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3.5 py-2 text-sm text-white/80 backdrop-blur">
+                  <Icon size={15} className="text-emerald-300" /> {text}
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-center lg:justify-start gap-4 text-white/40 text-sm">
-              <a href="#conductores" className="hover:text-white/70 transition-colors flex items-center gap-1.5"><span>🚗</span> ¿Eres conductor? Únete</a>
-              <span>·</span>
-              <a href="#flotilla" className="hover:text-white/70 transition-colors flex items-center gap-1.5"><span>🏢</span> Gestiona tu flotilla</a>
+            <div className="flex flex-col items-center justify-center gap-3 text-sm text-white/70 sm:flex-row lg:justify-start">
+              <a href="/driver-onboarding" className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-4 py-2.5 font-semibold text-emerald-100 transition hover:bg-emerald-500/25">
+                <span>🚗</span> Empieza a ganar - Suscribete
+              </a>
+              <a href="/buscar-conductor" className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2.5 font-semibold text-white/80 transition hover:bg-white/20">
+                <span>📍</span> Buscar conductor
+              </a>
             </div>
           </div>
 
-          {/* Right: Booking card */}
-          <div className="order-1 lg:order-2 w-full max-w-sm mx-auto sm:max-w-md lg:max-w-none">
-            <div className="rounded-3xl p-4 sm:p-5 lg:p-6 shadow-2xl shadow-black/40 bg-white overflow-hidden">
+          <div className="order-1 lg:order-2 w-full max-w-sm mx-auto sm:max-w-md lg:max-w-none motion-safe:animate-fade-up" style={{ animationDelay: "80ms" }}>
+            <div className="overflow-hidden rounded-[28px] border border-white/20 bg-white p-4 shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:p-5 lg:p-6">
 
-              {/* Toggle Viaje/Paquete */}
+              <div className="mb-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Reserva rápida</p>
+                  <p className="text-sm font-semibold text-slate-800">Viaja con confianza y transparencia</p>
+                </div>
+                <div className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Sin cargos ocultos</div>
+              </div>
+
               <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg">
                 <button
                   onClick={() => setServiceType("trip")}
@@ -283,6 +385,7 @@ export default function HeroSection() {
                           onChange={(val) => { setPickup(val); if (!val) setPickupCoords(null); }}
                           onSelect={(addr, lat, lng) => { setPickupCoords({ lat, lng }); setGpsError(""); mapRef.current?.setPickup(lat, lng, addr); }}
                           icon={<span className="w-3 h-3 rounded-full inline-block" style={{ background: "oklch(0.76 0.18 148)" }} />}
+                          autoLocate
                         />
                       </div>
                       <button
@@ -357,7 +460,7 @@ export default function HeroSection() {
                   >
                     {calculating
                       ? <><Loader2 size={16} className="animate-spin" /> Calculando ruta...</>
-                      : <>Ver precios disponibles <ChevronRight size={16} /></>
+                      : <>Buscar conductor <ChevronRight size={16} /></>
                     }
                   </button>
                   <p className="text-center text-xs text-slate-400 mt-2">Sin cargos hasta confirmar el viaje</p>
@@ -399,6 +502,7 @@ export default function HeroSection() {
               {/* PARCEL FORM */}
               {step === "form" && serviceType === "parcel" && (
                 <HeroParcelForm
+                  onSubmit={handleParcelSubmit}
                   onNavigateToDashboard={() => {
                     if (isAuthenticated) {
                       navigate("/client-dashboard?tab=parcels");
@@ -448,7 +552,7 @@ export default function HeroSection() {
             {/* Social proof */}
             <div className="flex items-center justify-center gap-3 mt-4">
               <div className="flex -space-x-2">
-                {["/manus-storage/avatar1_c813ee08.jpg", "/manus-storage/avatar2_b26d0545.jpg", "/manus-storage/avatar3_46cc7298.jpg", "/manus-storage/avatar4_6f0fea6f.jpg"].map((src, i) => (
+                {["/assets-storage/avatar1_c813ee08.jpg", "/assets-storage/avatar2_b26d0545.jpg", "/assets-storage/avatar3_46cc7298.jpg", "/assets-storage/avatar4_6f0fea6f.jpg"].map((src, i) => (
                   <img key={i} src={src} alt="Cliente" className="w-8 h-8 rounded-full border-2 object-cover object-center" style={{ borderColor: "oklch(0.14 0.02 200)" }} />
                 ))}
               </div>

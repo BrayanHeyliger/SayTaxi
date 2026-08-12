@@ -99,6 +99,16 @@ export function ParcelTracking({ order, onClose }: ParcelTrackingProps) {
     toast.success("Código copiado al portapapeles");
   };
 
+  const shareTrackingLink = () => {
+    const link = `${window.location.origin}/track/${order.trackingCode}`;
+    if (navigator.share) {
+      navigator.share({ title: "Rastreo de paquete", text: `Sigue tu paquete con este enlace: ${link}` });
+    } else {
+      navigator.clipboard.writeText(link);
+      toast.success("Enlace de rastreo copiado");
+    }
+  };
+
   const statusConfig = STATUS_CONFIG[order.status];
 
   return (
@@ -160,8 +170,8 @@ export function ParcelTracking({ order, onClose }: ParcelTrackingProps) {
 
           {/* Botones de acción */}
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="gap-2 text-sm">
-              <MessageCircle size={14} /> Chat
+            <Button variant="outline" className="gap-2 text-sm" onClick={shareTrackingLink}>
+              <MessageCircle size={14} /> Compartir
             </Button>
             <Button variant="outline" className="gap-2 text-sm">
               <Phone size={14} /> Llamar

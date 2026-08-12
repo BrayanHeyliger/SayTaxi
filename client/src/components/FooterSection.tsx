@@ -1,5 +1,5 @@
 /**
- * FooterSection — WhatsApp Taxi SaaS
+ * FooterSection — Passenger
  * Design: Verde Operacional — dark footer con links y branding
  */
 import { useI18n } from "@/contexts/I18nContext";
@@ -10,32 +10,63 @@ const footerLinks = {
   Producto: ["Características", "Precios", "Changelog", "Roadmap"],
   Empresa: ["Sobre nosotros", "Blog", "Carreras", "Prensa"],
   Recursos: ["Documentación", "FAQ", "Guías", "Soporte"],
-  Legal: ["Privacidad", "Términos de uso", "Cookies", "GDPR"],
+  Legal: ["Términos de Servicio", "Política de Privacidad", "Acuerdo de Arbitraje", "Política de Tolerancia Cero", "Requisitos de Seguro para Conductores", "Contrato de Suscripción para Conductores"],
 };
+
+const footerInfoSlugs: Record<string, string> = {
+  "Sobre nosotros": "about",
+  Changelog: "changelog",
+  Roadmap: "roadmap",
+  Blog: "blog",
+  Carreras: "careers",
+  Prensa: "press",
+  Documentación: "docs",
+  "Guías": "guides",
+  "Política de Privacidad": "privacy",
+  "Términos de Servicio": "terms",
+  "Acuerdo de Arbitraje": "arbitration",
+  "Política de Tolerancia Cero": "zero-tolerance",
+  "Requisitos de Seguro para Conductores": "insurance-requirements",
+  "Contrato de Suscripción para Conductores": "driver-subscription-agreement",
+  Cookies: "cookies",
+  GDPR: "gdpr",
+  Soporte: "support",
+};
+
+function getFooterHref(link: string) {
+  if (link === "Características") return "/#features";
+  if (link === "Precios") return "/#pricing";
+  if (link === "Soporte") return "/support";
+  if (link === "FAQ") return "/faq";
+  const slug = footerInfoSlugs[link];
+  if (slug) return `/${slug}`;
+  return "#";
+}
 
 export default function FooterSection() {
   const { t } = useI18n();
   const { config } = useSiteConfig();
 
   return (
-    <footer
-      className="border-t"
-      style={{
-        background: "oklch(0.10 0.01 250)",
-        borderColor: "oklch(1 0 0 / 0.08)",
-      }}
-    >
-      <div className="container py-14">
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
+    <footer className="mt-12">
+      <div className="container py-12">
+        <div
+          className="rounded-2xl p-8 shadow-2xl"
+          style={{
+            background: "linear-gradient(180deg, oklch(0.12 0.01 250 / 0.98) 0%, oklch(0.14 0.01 250 / 0.98) 100%)",
+            border: "1px solid rgba(255,255,255,0.10)",
+          }}
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-8 mb-6">
           {/* Brand */}
-          <div className="col-span-2 lg:col-span-1">
+            <div className="col-span-2 lg:col-span-1">
             <div className="flex items-center gap-3 mb-4">
               <div
                 className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0"
                 style={{ background: config.logoUrl ? "transparent" : config.primaryColor }}
               >
                 <img
-                  src={config.logoUrl || "/manus-storage/logo-icon_34950e08.png"}
+                  src={config.logoUrl || "/assets-storage/logo-icon_34950e08.png"}
                   alt="Logo"
                   className="w-full h-full object-cover"
                 />
@@ -50,7 +81,7 @@ export default function FooterSection() {
                 </span>
               </span>
             </div>
-            <p className="text-white/40 text-sm leading-relaxed mb-5">
+            <p className="text-white/70 text-sm leading-relaxed mb-5">
               {config.tagline}
             </p>
             <div className="flex gap-3">
@@ -60,9 +91,12 @@ export default function FooterSection() {
                   className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10"
                   style={{ border: "1px solid oklch(1 0 0 / 0.1)" }}
                 >
-                  <Icon size={14} className="text-white/50" />
+                  <Icon size={14} className="text-white/70" />
                 </button>
               ))}
+            </div>
+            <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+              Cumplimiento legal visible: privacidad, arbitraje, seguros y tolerancia cero disponibles en el pie de página.
             </div>
           </div>
 
@@ -79,9 +113,8 @@ export default function FooterSection() {
                 {links.map((link) => (
                   <li key={link}>
                     <a
-                      href={link === "FAQ" ? "#faq" : link === "Características" ? "#features" : link === "Precios" ? "#pricing" : link === "Soporte" ? "#contact" : "#"}
-                      onClick={link === "FAQ" ? (e) => { e.preventDefault(); document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" }); } : undefined}
-                      className="text-white/40 hover:text-white/80 text-sm transition-colors text-left cursor-pointer"
+                      href={getFooterHref(link)}
+                      className="text-white/65 hover:text-white text-sm transition-colors text-left cursor-pointer"
                     >
                       {link}
                     </a>
@@ -90,19 +123,12 @@ export default function FooterSection() {
               </ul>
             </div>
           ))}
-        </div>
+          </div>
 
-        {/* Bottom bar */}
-        <div
-          className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t"
-          style={{ borderColor: "oklch(1 0 0 / 0.08)" }}
-        >
-          <p className="text-white/30 text-xs">
-            {config.footerText}
-          </p>
-          <p className="text-white/30 text-xs flex items-center gap-1.5">
-            Hecho con <Heart size={11} className="text-red-400 fill-red-400" /> para empresas de taxi en Latinoamérica
-          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t" style={{ borderColor: "rgba(255,255,255,0.10)" }}>
+            <p className="text-white/70 text-sm">{config.footerText}</p>
+            <p className="text-white/70 text-sm flex items-center gap-2">Hecho con <Heart size={12} className="text-red-400 fill-red-400" /> para empresas de taxi</p>
+          </div>
         </div>
       </div>
     </footer>

@@ -5,6 +5,7 @@ import NominatimAutocomplete from "./NominatimAutocomplete";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { toast } from "sonner";
+import { calculateParcelPricing } from "@/lib/parcelUtils";
 
 interface HeroParcelFormProps {
   onSubmit?: (data: ParcelFormData) => void;
@@ -69,17 +70,17 @@ export function HeroParcelForm({ onSubmit, onNavigateToDashboard }: HeroParcelFo
 
   const calculatePrice = (pickup: { lat: number; lng: number }, dropoff: { lat: number; lng: number }) => {
     setIsCalculating(true);
-    const distLat = Math.abs(dropoff.lat - pickup.lat) * 111000;
-    const distLng = Math.abs(dropoff.lng - pickup.lng) * 111000 * Math.cos(pickup.lat * Math.PI / 180);
-    const distanceKm = Math.sqrt(distLat * distLat + distLng * distLng) / 1000;
+    const pricing = calculateParcelPricing({
+      pickupLat: pickup.lat,
+      pickupLng: pickup.lng,
+      dropoffLat: dropoff.lat,
+      dropoffLng: dropoff.lng,
+      packageType,
+      weight: parseFloat(weight) || 1,
+      loyaltyEligible: true,
+    });
 
-    const basePrices: Record<string, number> = { small: 3.5, medium: 5.5, large: 8.0 };
-    const basePrice = basePrices[packageType] || 3.5;
-    const distanceCharge = distanceKm * 1.2;
-    const weightCharge = (parseFloat(weight) - 1) * 0.5;
-    const total = basePrice + distanceCharge + weightCharge;
-
-    setEstimatedPrice(`$${total.toFixed(2)}`);
+    setEstimatedPrice(`$${pricing.price.toFixed(2)}`);
     setIsCalculating(false);
   };
 
@@ -115,10 +116,10 @@ export function HeroParcelForm({ onSubmit, onNavigateToDashboard }: HeroParcelFo
         </div>
 
         {/* Formulario */}
-        <div className="space-y-3 flex flex-col justify-between">
+        <div className="space-y-3 flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3 sm:p-4">
           {/* Ubicación de recogida */}
           <div>
-            <label className="text-xs font-semibold text-slate-600 mb-1 block">📍 Recoger de</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">📍 Recoger de</label>
             <NominatimAutocomplete
               placeholder="Tu ubicación"
               value={pickupAddress}
@@ -126,12 +127,13 @@ export function HeroParcelForm({ onSubmit, onNavigateToDashboard }: HeroParcelFo
               onSelect={handlePickupSelect}
               countryCode={userCountryCode}
               viewbox={userViewbox}
+              autoLocate
             />
           </div>
 
           {/* Ubicación de entrega */}
           <div>
-            <label className="text-xs font-semibold text-slate-600 mb-1 block">📦 Entregar en</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">📦 Entregar en</label>
             <NominatimAutocomplete
               placeholder="Destino"
               value={dropoffAddress}
@@ -144,11 +146,14 @@ export function HeroParcelForm({ onSubmit, onNavigateToDashboard }: HeroParcelFo
 
           {/* Tipo de paquete */}
           <div>
-            <label className="text-xs font-semibold text-slate-600 mb-1 block">📦 Tipo de paquete</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">📦 Tipo de paquete</label>
             <select
               value={packageType}
-              onChange={(e) => setPackageType(e.target.value as "small" | "medium" | "large")}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+              onChange={(e) => {
+                setPackageType(e.target.value as "small" | "medium" | "large");
+                if (pickupCoords && dropoffCoords) calculatePrice(pickupCoords, dropoffCoords);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-green-500"
             >
               <option value="small">Pequeño (hasta 2kg)</option>
               <option value="medium">Mediano (2-5kg)</option>
@@ -159,19 +164,22 @@ export function HeroParcelForm({ onSubmit, onNavigateToDashboard }: HeroParcelFo
           {/* Peso */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1 block">⚖️ Peso (kg)</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">⚖️ Peso (kg)</label>
               <input
                 type="number"
                 min="1"
                 max="10"
                 value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                onChange={(e) => {
+                  setWeight(e.target.value);
+                  if (pickupCoords && dropoffCoords) calculatePrice(pickupCoords, dropoffCoords);
+                }}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1 block">💰 Precio</label>
-              <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-bold text-green-600">
+              <label className="mb-1 block text-xs font-semibold text-slate-700">💰 Precio</label>
+              <div className="rounded-lg border border-green-300 bg-green-100/70 px-3 py-2 text-sm font-bold text-green-700">
                 {estimatedPrice}
               </div>
             </div>
@@ -179,13 +187,13 @@ export function HeroParcelForm({ onSubmit, onNavigateToDashboard }: HeroParcelFo
 
           {/* Descripción */}
           <div>
-            <label className="text-xs font-semibold text-slate-600 mb-1 block">📝 Descripción (opcional)</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">📝 Descripción (opcional)</label>
             <input
               type="text"
               placeholder="Ej: Documentos, ropa, electrónica..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
 

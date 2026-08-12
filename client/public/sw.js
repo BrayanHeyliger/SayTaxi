@@ -1,5 +1,5 @@
-const CACHE_NAME = "wataxi-v2";
-const STATIC_ASSETS = ["/", "/login", "/register", "/manifest.json"];
+const CACHE_NAME = "wataxi-v4";
+const STATIC_ASSETS = ["/", "/login", "/register", "/manifest.json", "/favicon.ico", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -20,6 +20,25 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   if (event.request.url.includes("/api/") || event.request.url.includes("/socket.io")) return;
+
+  // For HTML navigations, prefer fresh network response to avoid stale SPA shells.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || caches.match("/");
+        })
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
@@ -50,7 +69,7 @@ self.addEventListener("push", (event) => {
     requireInteraction: data.requireInteraction || false,
   };
   event.waitUntil(
-    self.registration.showNotification(data.title || "WhatsApp Taxi 🚕", options)
+    self.registration.showNotification(data.title || "Passenger 🚗", options)
   );
 });
 

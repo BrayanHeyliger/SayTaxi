@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Passenger Mascot Icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d1fae5"/>
+      <stop offset="100%" stop-color="#86efac"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#0f172a"/>
+  <circle cx="128" cy="128" r="88" fill="url(#bg)"/>
+  <circle cx="100" cy="110" r="13" fill="#1f2937"/>
+  <circle cx="156" cy="110" r="13" fill="#1f2937"/>
+  <circle cx="100" cy="110" r="4" fill="#fff"/>
+  <circle cx="156" cy="110" r="4" fill="#fff"/>
+  <path d="M82 148c12 24 48 30 46 30s34-6 46-30" fill="none" stroke="#f59e0b" stroke-width="10" stroke-linecap="round"/>
+  <rect x="108" y="154" width="40" height="10" rx="5" fill="#0f766e"/>
+  <path d="M48 212c18-18 38-30 60-36" fill="none" stroke="#10b981" stroke-width="10" stroke-linecap="round"/>
+  <path d="M208 212c-18-18-38-30-60-36" fill="none" stroke="#10b981" stroke-width="10" stroke-linecap="round"/>
+</svg>

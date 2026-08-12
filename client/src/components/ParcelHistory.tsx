@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Download, MapPin, Calendar, DollarSign, Package, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { normalizeParcelOrder } from "@/lib/parcelUtils";
 
 export function ParcelHistory() {
   const [filter, setFilter] = useState<"all" | "pending" | "delivered" | "cancelled">("all");
 
   const { data: orders, isLoading } = trpc.parcels.historyByClient.useQuery();
 
-  const filteredOrders = (orders as any[])?.filter((order: any) => {
+  const filteredOrders = (orders as any[])?.map((order: any) => normalizeParcelOrder(order)).filter((order: any) => {
     if (filter === "all") return true;
     return order.status === filter;
   }) || [];

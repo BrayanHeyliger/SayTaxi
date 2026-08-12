@@ -1,5 +1,10 @@
 # WhatsApp Taxi SaaS - Plataforma Completa
 
+## 🧠 Modo de trabajo del repositorio
+- Priorizar trabajo local/offline siempre que sea posible.
+- Usar los modelos Qwen configurados localmente vía Ollama para tareas de desarrollo.
+- Evitar servicios en la nube, de pago o que consuman crédito salvo que se pidan explícitamente.
+
 ## 📱 Descripción
 Plataforma SaaS profesional para gestionar servicios de taxi a través de WhatsApp. Incluye landing page, paneles de administración, gestión de conductores, clientes y pagos.
 

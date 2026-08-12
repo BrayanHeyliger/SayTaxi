@@ -1,14 +1,107 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { desc, asc } from "drizzle-orm";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, router, adminProcedure } from "../_core/trpc";
+import fs from "node:fs/promises";
+import sharp from "sharp";
+import path from "node:path";
 import { getDb } from "../db";
 import { siteSettings, contactMessages } from "../../drizzle/schema";
 import nodemailer from "nodemailer";
 
 const SITE_CONFIG_KEY = "site_config";
+const NEWS_POSTS_KEY = "news_posts";
+
+const newsPostSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  content: z.string().min(1),
+  imageUrl: z.string().optional(),
+  publishedAt: z.string().min(1),
+  author: z.string().min(1),
+  tags: z.array(z.string()).default([]),
+  featured: z.boolean().default(false),
+  // Additional metadata
+  slug: z.string().optional(),
+  status: z.enum(["draft", "published", "scheduled"]).default("published"),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
+  category: z.string().optional(),
+  order: z.number().optional(),
+});
 
 export const siteSettingsRouter = router({
+  // Public news feed for "Novedades" page
+  getNewsPosts: publicProcedure.query(async () => {
+    try {
+      // First try local fallback file (useful in dev without DB)
+      try {
+        const fallbackPath = path.resolve(process.cwd(), "server/_data/news_posts.json");
+        const raw = await fs.readFile(fallbackPath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (fileErr) {
+        // ignore file errors and continue to DB lookup
+      }
+
+      const db = await getDb();
+      if (db) {
+        const rows = await db
+          .select()
+          .from(siteSettings)
+          .where(eq(siteSettings.key, NEWS_POSTS_KEY))
+          .limit(1);
+        if (rows.length > 0) {
+          const parsed = JSON.parse(rows[0].value);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      }
+
+      return [];
+    } catch (err) {
+      console.error("[siteSettings] getNewsPosts error:", err);
+      return [];
+    }
+  }),
+
+  // Save complete news list (admin UI uses this for create/edit/delete)
+  saveNewsPosts: adminProcedure
+    .input(z.object({ posts: z.array(newsPostSchema) }))
+    .mutation(async ({ input }) => {
+      const payload = JSON.stringify(input.posts);
+
+      // Try to save to DB if available
+      try {
+        const db = await getDb();
+        if (db) {
+          try {
+            await db
+              .insert(siteSettings)
+              .values({ key: NEWS_POSTS_KEY, value: payload })
+              .onDuplicateKeyUpdate({ set: { value: payload } });
+            return { success: true, savedTo: "db" };
+          } catch (dbErr) {
+            console.error("[siteSettings] DB write failed, falling back to file:", dbErr);
+            // continue to file fallback
+          }
+        }
+      } catch (err) {
+        console.error("[siteSettings] getDb error (continuing to file fallback):", err);
+      }
+
+      // Fallback: write to local file so admin can edit content even without DB
+      try {
+        const fallbackPath = path.resolve(process.cwd(), "server/_data/news_posts.json");
+        await fs.mkdir(path.dirname(fallbackPath), { recursive: true });
+        await fs.writeFile(fallbackPath, payload, "utf-8");
+        return { success: true, savedTo: "file" };
+      } catch (fileErr) {
+        console.error("[siteSettings] saveNewsPosts file write error:", fileErr);
+        throw new Error("No se pudieron guardar las novedades");
+      }
+    }),
+
   // Get site config — public so the landing page can load it without auth
   getConfig: publicProcedure.query(async () => {
     try {
@@ -27,8 +120,8 @@ export const siteSettingsRouter = router({
     }
   }),
 
-  // Save site config — public procedure (admin auth handled client-side via LocalAuth)
-  saveConfig: publicProcedure
+  // Save site config — admin only
+  saveConfig: adminProcedure
     .input(z.object({ config: z.string() }))
     .mutation(async ({ input }) => {
       try {
@@ -73,7 +166,7 @@ export const siteSettingsRouter = router({
           }
         }
 
-        const subject = `[WhatsApp Taxi] Nuevo mensaje de ${input.name}${input.company ? ` (${input.company})` : ""}`;
+        const subject = `[Passenger] Nuevo mensaje de ${input.name}${input.company ? ` (${input.company})` : ""}`;
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f9fafb;border-radius:12px;">
             <div style="background:#25D366;padding:16px 20px;border-radius:8px 8px 0 0;">
@@ -89,7 +182,7 @@ export const siteSettingsRouter = router({
                 <p style="color:#6b7280;font-size:12px;margin:0 0 8px 0;text-transform:uppercase;letter-spacing:0.05em;">Mensaje:</p>
                 <p style="color:#111827;font-size:15px;line-height:1.6;margin:0;">${input.message.replace(/\n/g, "<br>")}</p>
               </div>
-              <p style="color:#9ca3af;font-size:12px;margin-top:20px;text-align:center;">Enviado desde el formulario de contacto de WhatsApp Taxi SaaS</p>
+              <p style="color:#9ca3af;font-size:12px;margin-top:20px;text-align:center;">Enviado desde el formulario de contacto de Passenger</p>
             </div>
           </div>`;
 
@@ -110,7 +203,7 @@ export const siteSettingsRouter = router({
       // This line is unreachable but satisfies TS - actual save happens below
     }),
 
-  // Save contact message to DB and send email
+  // Save contact message to DB and send email (public)
   saveAndSendContact: publicProcedure
     .input(z.object({
       name: z.string().min(1),
@@ -147,7 +240,7 @@ export const siteSettingsRouter = router({
       }
 
       // Send email notification
-      const subject = `[WhatsApp Taxi] Nuevo mensaje de ${input.name}${input.company ? ` (${input.company})` : ""}`;
+      const subject = `[Passenger] Nuevo mensaje de ${input.name}${input.company ? ` (${input.company})` : ""}`;
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f9fafb;border-radius:12px;">
           <div style="background:#25D366;padding:16px 20px;border-radius:8px 8px 0 0;">
@@ -163,7 +256,7 @@ export const siteSettingsRouter = router({
               <p style="color:#6b7280;font-size:12px;margin:0 0 8px 0;text-transform:uppercase;letter-spacing:0.05em;">Mensaje:</p>
               <p style="color:#111827;font-size:15px;line-height:1.6;margin:0;">${input.message.replace(/\n/g, "<br>")}</p>
             </div>
-            <p style="color:#9ca3af;font-size:12px;margin-top:20px;text-align:center;">Enviado desde el formulario de contacto de WhatsApp Taxi SaaS</p>
+            <p style="color:#9ca3af;font-size:12px;margin-top:20px;text-align:center;">Enviado desde el formulario de contacto de Passenger</p>
           </div>
         </div>`;
 
@@ -182,7 +275,7 @@ export const siteSettingsRouter = router({
     }),
 
   // Get all contact messages (admin only)
-  getMessages: publicProcedure
+  getMessages: adminProcedure
     .input(z.object({
       status: z.enum(["all", "unread", "read", "replied", "archived"]).optional().default("all"),
       limit: z.number().optional().default(50),
@@ -202,7 +295,7 @@ export const siteSettingsRouter = router({
     }),
 
   // Update message status
-  updateMessageStatus: publicProcedure
+  updateMessageStatus: adminProcedure
     .input(z.object({
       id: z.number(),
       status: z.enum(["unread", "read", "replied", "archived"]),
@@ -218,7 +311,7 @@ export const siteSettingsRouter = router({
     }),
 
   // Delete message
-  deleteMessage: publicProcedure
+  deleteMessage: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -228,7 +321,7 @@ export const siteSettingsRouter = router({
     }),
 
   // Get unread count
-  getUnreadCount: publicProcedure.query(async () => {
+  getUnreadCount: adminProcedure.query(async () => {
     const db = await getDb();
     if (!db) return { count: 0 };
     try {
@@ -240,7 +333,7 @@ export const siteSettingsRouter = router({
   }),
 
   // Test SMTP connection
-  testSmtp: publicProcedure
+  testSmtp: adminProcedure
     .input(z.object({
       smtpHost: z.string().min(1),
       smtpPort: z.string().default("587"),
@@ -265,7 +358,7 @@ export const siteSettingsRouter = router({
         await transporter.sendMail({
           from: input.smtpFrom || input.smtpUser,
           to: input.testEmail,
-          subject: "✅ Prueba de conexión SMTP — WhatsApp Taxi SaaS",
+          subject: "✅ Prueba de conexión SMTP — Passenger",
           html: `
             <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
               <div style="background:#25D366;padding:16px;border-radius:8px 8px 0 0;">
@@ -277,7 +370,7 @@ export const siteSettingsRouter = router({
                   <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Servidor:</td><td style="padding:6px 0;font-weight:600;">${input.smtpHost}:${input.smtpPort}</td></tr>
                   <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Usuario:</td><td style="padding:6px 0;font-weight:600;">${input.smtpUser}</td></tr>
                 </table>
-                <p style="color:#9ca3af;font-size:12px;margin-top:16px;">WhatsApp Taxi SaaS — Panel de Administración</p>
+                <p style="color:#9ca3af;font-size:12px;margin-top:16px;">Passenger — Panel de Administración</p>
               </div>
             </div>`,
         });
@@ -285,6 +378,74 @@ export const siteSettingsRouter = router({
       } catch (err: any) {
         console.error("[SMTP Test] Error:", err);
         throw new Error(`Error de conexión SMTP: ${err.message || "Verifica host, puerto y credenciales"}`);
+      }
+    }),
+
+  // Upload image for news (admin only). Expects a data URL (base64) and saves to client/public/uploads
+  uploadNewsImage: adminProcedure
+    .input(z.object({ dataUrl: z.string() }))
+    .mutation(async ({ input }) => {
+      try {
+        const matches = input.dataUrl.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/);
+        if (!matches) throw new Error("Formato de imagen no reconocido. Usa PNG/JPEG/WebP en base64.");
+        const mime = matches[1];
+        const ext = mime.split("/")[1] === "jpeg" ? "jpg" : mime.split("/")[1];
+        const base64 = matches[3];
+        const buffer = Buffer.from(base64, "base64");
+
+        const uploadsDir = path.resolve(process.cwd(), "server/uploads");
+        await fs.mkdir(uploadsDir, { recursive: true });
+        const filename = `news_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const filePath = path.join(uploadsDir, filename);
+        await fs.writeFile(filePath, buffer);
+        // Create a thumbnail (max width 800px) and small thumb
+        try {
+          const thumbPath = path.join(uploadsDir, `thumb_${filename}`);
+          await sharp(buffer).resize({ width: 1200, withoutEnlargement: true }).toFile(filePath);
+          await sharp(buffer).resize({ width: 400, withoutEnlargement: true }).toFile(thumbPath);
+        } catch (imgErr) {
+          // Image processing is optional; log and continue
+          console.warn("[siteSettings] image processing failed:", imgErr);
+        }
+        // Return web-accessible path
+        const publicPath = `/uploads/${filename}`;
+        return { success: true, url: publicPath };
+      } catch (err) {
+        console.error("[siteSettings] uploadNewsImage error:", err);
+        throw new Error("No se pudo subir la imagen");
+      }
+    }),
+
+  // List uploaded media (admin)
+  getMediaList: adminProcedure.query(async () => {
+    try {
+        const uploadsDir = path.resolve(process.cwd(), "server/uploads");
+      const files = await fs.readdir(uploadsDir);
+      const items = await Promise.all(
+        files.map(async (f) => {
+          const fp = path.join(uploadsDir, f);
+          const stat = await fs.stat(fp);
+          return { filename: f, url: `/uploads/${f}`, size: stat.size, mtime: stat.mtime.toISOString() };
+        })
+      );
+      return { items };
+    } catch (err) {
+      return { items: [] };
+    }
+  }),
+
+  // Delete an uploaded media file (admin)
+  deleteMedia: adminProcedure
+    .input(z.object({ filename: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        const uploadsDir = path.resolve(process.cwd(), "server/uploads");
+        const fp = path.join(uploadsDir, input.filename);
+        await fs.unlink(fp);
+        return { success: true };
+      } catch (err) {
+        console.error("[siteSettings] deleteMedia error:", err);
+        throw new Error("No se pudo borrar el archivo");
       }
     }),
 });

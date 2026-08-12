@@ -1,5 +1,5 @@
 /**
- * ContactSection — WhatsApp Taxi SaaS
+ * ContactSection — Passenger
  * Design: Verde Operacional — dark bg, formulario de contacto + info
  */
 import { useState } from "react";

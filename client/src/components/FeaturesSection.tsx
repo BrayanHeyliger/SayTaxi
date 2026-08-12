@@ -1,5 +1,5 @@
 /**
- * FeaturesSection — WhatsApp Taxi SaaS
+ * FeaturesSection — Passenger
  * Design: Verde Operacional — layout asimétrico con artefactos operacionales de taxi
  * Sección alternada: texto izquierda + demo derecha, con chat bubbles y status badges
  */

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,8 +17,10 @@ import ReferralPanel from "@/components/ReferralPanel";
 import { TripChat } from "@/components/TripChat";
 import SafetyTipsButton from "@/components/SafetyTipsButton";
 import { DriverParcelPanel } from "@/components/DriverParcelPanel";
+import GlobalMascotAssistant from "@/components/GlobalMascotAssistant";
 const TRIPS_KEY = "wt_pending_trips";
 const DRIVER_HISTORY_KEY = "wt_driver_history";
+const LIVE_TRIP_KEY = "wt_live_trip_state";
 
 interface PendingTrip {
   id: string; clientId: number; clientName: string;
@@ -46,6 +48,9 @@ export default function DriverDashboard() {
   const [otpCode] = useState("4821"); // Demo OTP
   const [passengerRating, setPassengerRating] = useState(0);
   const [activeTab, setActiveTab] = useState<"trips" | "earnings" | "referrals" | "profile" | "docs" | "parcels">("trips");
+  const [liveTripState, setLiveTripState] = useState<any>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const mapRef = useRef<any>(null);
   const [earningsHistory] = useState<EarningsEntry[]>([
     { date: "Hoy", trips: completedCount, earnings },
     { date: "Ayer", trips: 8, earnings: 145.50 },
@@ -55,6 +60,37 @@ export default function DriverDashboard() {
   ]);
 
   useEffect(() => { if (!isAuthenticated) navigate("/login"); }, [isAuthenticated]);
+
+  useEffect(() => {
+    const syncLiveTrip = () => {
+      try {
+        const raw = localStorage.getItem(LIVE_TRIP_KEY);
+        setLiveTripState(raw ? JSON.parse(raw) : null);
+      } catch {
+        setLiveTripState(null);
+      }
+    };
+
+    syncLiveTrip();
+    const restoreActiveTrip = () => {
+      try {
+        const trips: PendingTrip[] = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
+        const activeTrip = trips.find((trip) => trip.status === "accepted" || trip.status === "in_progress");
+        if (activeTrip) {
+          setCurrentTrip(activeTrip);
+          setTripPhase(activeTrip.status === "in_progress" ? "in_progress" : "accepted");
+        }
+      } catch {}
+    };
+
+    restoreActiveTrip();
+    window.addEventListener("storage", syncLiveTrip);
+    const interval = window.setInterval(syncLiveTrip, 2000);
+    return () => {
+      window.removeEventListener("storage", syncLiveTrip);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const checkTrips = useCallback(() => {
     if (!isOnline || tripPhase !== "idle") return;
@@ -83,6 +119,29 @@ export default function DriverDashboard() {
     return () => clearInterval(interval);
   }, [checkTrips]);
 
+  useEffect(() => {
+    if (!mapRef.current || !currentTrip || !currentLocation) return;
+    if (tripPhase !== "accepted" && tripPhase !== "in_progress") return;
+    const destinationLabel = tripPhase === "accepted" ? currentTrip.pickup : currentTrip.dropoff;
+    let cancelled = false;
+
+    const drawLiveRoute = async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationLabel)}&limit=1`);
+        const data = await res.json();
+        if (cancelled || !data?.[0]) return;
+        mapRef.current.setRouteBetween(
+          { lat: currentLocation.lat, lng: currentLocation.lng, label: "Mi posición" },
+          { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), label: destinationLabel },
+          { vehicleEmoji: "🚕", vehicleLabel: user?.name || "Conductor", animate: true }
+        );
+      } catch {}
+    };
+
+    drawLiveRoute();
+    return () => { cancelled = true; };
+  }, [currentTrip, currentLocation, tripPhase, user?.name]);
+
   const handleAcceptTrip = (trip: PendingTrip) => {
     const trips: PendingTrip[] = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
     const updated = trips.map(t => t.id === trip.id ? {
@@ -94,6 +153,14 @@ export default function DriverDashboard() {
     setCurrentTrip({ ...trip, status: "accepted", estimatedTime: "5 min" });
     setTripPhase("accepted");
     setPendingTrips([]);
+    localStorage.setItem(LIVE_TRIP_KEY, JSON.stringify({
+      tripId: trip.id,
+      phase: "accepted",
+      pickup: { label: trip.pickup },
+      dropoff: { label: trip.dropoff },
+      driverName: user?.name || "Conductor",
+      updatedAt: Date.now(),
+    }));
     toast.success("¡Viaje aceptado!");
     addPersistedNotif(`✅ Viaje aceptado: ${trip.pickup} → ${trip.dropoff} · ${trip.fare}`, {
       type: "success", sound: "accepted", url: "/driver-dashboard",
@@ -114,6 +181,14 @@ export default function DriverDashboard() {
         const trips: PendingTrip[] = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
         const updated = trips.map(t => t.id === currentTrip.id ? { ...t, status: "in_progress" } : t);
         localStorage.setItem(TRIPS_KEY, JSON.stringify(updated));
+        localStorage.setItem(LIVE_TRIP_KEY, JSON.stringify({
+          tripId: currentTrip.id,
+          phase: "in_progress",
+          pickup: { label: currentTrip.pickup },
+          dropoff: { label: currentTrip.dropoff },
+          driverName: user?.name || "Conductor",
+          updatedAt: Date.now(),
+        }));
       }
     } else {
       toast.error("Código OTP incorrecto");
@@ -121,6 +196,12 @@ export default function DriverDashboard() {
   };
 
   const handleCompleteTrip = () => {
+    localStorage.removeItem(LIVE_TRIP_KEY);
+    if (currentTrip) {
+      const trips: PendingTrip[] = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
+      const updated = trips.map((trip) => trip.id === currentTrip.id ? { ...trip, status: "completed" } : trip);
+      localStorage.setItem(TRIPS_KEY, JSON.stringify(updated));
+    }
     setTripPhase("rating");
   };
 
@@ -136,6 +217,7 @@ export default function DriverDashboard() {
     setCurrentTrip(null);
     setPassengerRating(0);
     setOtpInput("");
+    localStorage.removeItem(LIVE_TRIP_KEY);
     toast.success(`¡Viaje completado! +${currentTrip.fare} ganados`);
   };
 
@@ -180,6 +262,46 @@ export default function DriverDashboard() {
     }
     toast.success(`Abriendo navegación hacia: ${destination}`);
   };
+
+  const driverMascotMood =
+    tripPhase === "accepted"
+      ? "ready"
+      : tripPhase === "in_progress"
+      ? "happy"
+      : pendingTrips.length > 0
+      ? "searching"
+      : "idle";
+
+  const driverMascotMessages =
+    tripPhase === "accepted"
+      ? [
+          "Excelente, ya aceptaste este viaje.",
+          "Recuerda confirmar llegada con el pasajero.",
+          "Mantente atento al punto de recogida.",
+        ]
+      : tripPhase === "in_progress"
+      ? [
+          "Viaje en curso, mantengamos una experiencia premium.",
+          "Conduccion suave y comunicacion clara.",
+          "Te acompano hasta completar este viaje.",
+        ]
+      : pendingTrips.length > 0
+      ? [
+          `Tienes ${pendingTrips.length} viaje(s) esperando respuesta.`,
+          "Revisa origen, destino y tarifa antes de aceptar.",
+          "Responder rapido mejora tu tasa de conversion.",
+        ]
+      : isOnline
+      ? [
+          "Estas en linea. Te aviso cuando entre un viaje.",
+          "Todo listo para recibir nuevas solicitudes.",
+          "Un buen dia para ganar con Passenger.",
+        ]
+      : [
+          "Activa modo en linea para empezar a recibir viajes.",
+          "Estoy aqui para ayudarte en tu jornada.",
+          "Cuando quieras, arrancamos.",
+        ];
 
   if (!isAuthenticated) return null;
 
@@ -271,7 +393,7 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full pb-32 lg:pb-6">
 
         {/* TAB: REFERIDOS */}
         {/* Broadcast Announcements */}
@@ -302,20 +424,24 @@ export default function DriverDashboard() {
         {/* TAB: VIAJES */}
         {activeTab === "trips" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              {/* Toggle Online */}
-              <Card className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">Disponibilidad</h2>
-                    <p className="text-sm text-slate-600">{isOnline ? "Recibirás solicitudes de viaje" : "Activa para recibir viajes"}</p>
+            {/* Toggle Online — moved to top near map for mobile */}
+            <div className="lg:col-span-2 order-first">
+              <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <h2 className="text-base font-bold text-slate-900">Disponibilidad</h2>
+                    <p className="text-xs text-slate-600 mt-0.5">{isOnline ? "Recibirás solicitudes de viaje" : "Activa para recibir viajes"}</p>
                   </div>
-                  <Button onClick={() => setIsOnline(!isOnline)}
-                    className={`px-6 py-2.5 font-semibold rounded-xl ${isOnline ? "bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/30" : "bg-slate-200 hover:bg-slate-300 text-slate-700"}`}>
-                    {isOnline ? "Desconectar" : "Conectar"}
-                  </Button>
+                  <button
+                    onClick={() => setIsOnline(!isOnline)}
+                    className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${isOnline ? "bg-green-500" : "bg-slate-300"}`}
+                  >
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isOnline ? "translate-x-6" : "translate-x-0.5"}`} />
+                  </button>
                 </div>
               </Card>
+            </div>
+            <div className="lg:col-span-2 space-y-4 order-2 lg:order-2">
 
               {/* Viaje Actual */}
               {currentTrip && tripPhase !== "idle" ? (
@@ -493,42 +619,34 @@ export default function DriverDashboard() {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-4">
-              <Card className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200">
-                <h3 className="font-semibold text-green-900 mb-2">Ganancias de Hoy</h3>
-                <p className="text-3xl font-bold text-green-600">${earnings.toFixed(2)}</p>
-                <p className="text-sm text-green-700 mt-1">{completedCount} viajes completados</p>
-              </Card>
+            <div className="space-y-4 order-1 lg:order-2 lg:sticky lg:top-4 self-start">
               {/* Mapa de ubicación */}
               <Card className="overflow-hidden p-0">
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between">
                   <h3 className="font-semibold text-slate-900 text-sm">Mi Ubicación</h3>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isOnline ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
-                    {isOnline ? "● En línea" : "○ Desconectado"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isOnline ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
+                      {isOnline ? "● En línea" : "○ Desconectado"}
+                    </span>
+                    <Button
+                      onClick={() => setIsOnline(!isOnline)}
+                      className={`h-8 rounded-full px-3 text-xs font-semibold ${isOnline ? "bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20" : "bg-slate-200 hover:bg-slate-300 text-slate-700"}`}
+                    >
+                      {isOnline ? "Desconectar" : "Conectar"}
+                    </Button>
+                  </div>
                 </div>
                 <div className="relative w-full" style={{ height: "240px" }}>
                   <LeafletMap
                     height="100%"
                     className="absolute inset-0 w-full h-full"
                     onMapReady={(ref) => {
-                      // LeafletMap auto-centers on user location
-                      if (currentTrip && (tripPhase === "accepted" || tripPhase === "in_progress")) {
-                        // Show route for active trip using OSRM
-                        navigator.geolocation?.getCurrentPosition(async (pos) => {
-                          const { latitude: lat, longitude: lng } = pos.coords;
-                          ref.setPickup(lat, lng, "Mi posición");
-                          // Geocode destination with Nominatim
-                          try {
-                            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(currentTrip.dropoff)}&limit=1`);
-                            const data = await res.json();
-                            if (data[0]) {
-                              ref.setDropoff(parseFloat(data[0].lat), parseFloat(data[0].lon), currentTrip.dropoff);
-                              ref.getRoute();
-                            }
-                          } catch {}
-                        });
-                      }
+                      mapRef.current = ref;
+                      navigator.geolocation?.getCurrentPosition(async (pos) => {
+                        const { latitude: lat, longitude: lng } = pos.coords;
+                        setCurrentLocation({ lat, lng });
+                        ref.setPickup(lat, lng, "Mi posición");
+                      });
                     }}
                   />
                 </div>
@@ -537,6 +655,11 @@ export default function DriverDashboard() {
                     <p className="text-xs text-blue-700 font-medium">Ruta activa: {currentTrip.pickup} → {currentTrip.dropoff}</p>
                   </div>
                 )}
+              </Card>
+              <Card className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200">
+                <h3 className="font-semibold text-green-900 mb-2">Ganancias de Hoy</h3>
+                <p className="text-3xl font-bold text-green-600">${earnings.toFixed(2)}</p>
+                <p className="text-sm text-green-700 mt-1">{completedCount} viajes completados</p>
               </Card>
               <Card className="p-4">
                 <h3 className="font-semibold text-slate-900 mb-3">Mi Perfil</h3>
@@ -645,6 +768,33 @@ export default function DriverDashboard() {
           </div>
         )}
       </main>
+      {currentTrip && (tripPhase === "accepted" || tripPhase === "in_progress") && (
+        <div className="fixed bottom-0 left-0 right-0 z-[9985] border-t border-slate-200 bg-white/96 px-4 py-3 shadow-[0_-12px_40px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden">
+          <div className="mx-auto flex max-w-7xl flex-col gap-3">
+            <div className="flex items-center justify-between rounded-2xl bg-slate-950 px-4 py-3 text-white shadow-sm">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">Viaje activo</p>
+                <p className="text-sm font-semibold leading-tight">{currentTrip.pickup} → {currentTrip.dropoff}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/45">ETA</p>
+                <p className="text-sm font-semibold text-emerald-300">{currentTrip.estimatedTime || "5 min"}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Button onClick={() => handleNavigate(tripPhase === "accepted" ? currentTrip.pickup : currentTrip.dropoff)} className="h-12 gap-1.5 rounded-2xl bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
+                <Navigation size={15} /> Navegar
+              </Button>
+              <Button onClick={handleMessagePassenger} className="h-12 gap-1.5 rounded-2xl bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700">
+                <MessageCircle size={15} /> Chat
+              </Button>
+              <Button onClick={handleSOS} variant="outline" className="h-12 gap-1.5 rounded-2xl border-red-200 bg-white px-3 text-xs font-semibold text-red-500 shadow-sm hover:bg-red-50">
+                <AlertTriangle size={15} /> SOS
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Chat seguro — visible cuando hay viaje activo */}
       {currentTrip && (currentTrip.status === "accepted" || currentTrip.status === "in_progress") && (
         <div id="driver-chat-anchor" className="fixed bottom-20 right-4 z-[9990]">
@@ -657,6 +807,12 @@ export default function DriverDashboard() {
           />
         </div>
       )}
+      <GlobalMascotAssistant
+        storageKey="wt_mascot_driver"
+        title="Asistente Driver"
+        mood={driverMascotMood}
+        messages={driverMascotMessages}
+      />
       <SafetyTipsButton audience="drivers" />
     </div>
   );

@@ -18,15 +18,66 @@ import { toast } from "sonner";
 import ReferralPanel from "@/components/ReferralPanel";
 import { ParcelTracking, type ParcelOrder } from "@/components/ParcelTracking";
 import { ParcelHistory } from "@/components/ParcelHistory";
+import { calculateParcelPricing, normalizeParcelOrder } from "@/lib/parcelUtils";
+import { trpc } from "@/lib/trpc";
+import PassengerMascot from "@/components/PassengerMascot";
 
 type TripStatus = "idle" | "searching" | "accepted" | "in_progress" | "completed" | "rating";
 type ActivePanel = "request" | "history" | "scheduled" | "promo" | "referrals" | "parcels";
 
 interface TripNotification { id: string; message: string; time: string; type: "info" | "success" | "warning"; }
 interface TripHistory { id: string; date: string; from: string; to: string; fare: string; driver: string; rating: number; }
+interface MarketSlide {
+  eyebrow: string;
+  title: string;
+  copy: string;
+  stats: Array<{ label: string; value: string }>;
+  gradient: string;
+  accent: string;
+}
 
 const TRIPS_KEY = "wt_pending_trips";
 const HISTORY_KEY = "wt_trip_history";
+const LIVE_TRIP_KEY = "wt_live_trip_state";
+
+const MARKET_SLIDES: MarketSlide[] = [
+  {
+    eyebrow: "Passenger Live",
+    title: "Tu viaje, tu elección en una sola app",
+    copy: "Elige conductor, sigue el trayecto en vivo y comparte el viaje con quien quieras. Diseñado para moverse rápido en ciudad y aeropuerto.",
+    stats: [
+      { label: "Tiempo medio", value: "5 min" },
+      { label: "Pago", value: "Directo al conductor" },
+      { label: "Cobertura", value: "Ciudad + aeropuerto" },
+    ],
+    gradient: "from-emerald-500 via-teal-500 to-cyan-500",
+    accent: "#d1fae5",
+  },
+  {
+    eyebrow: "Tracking nativo",
+    title: "Mira el mapa, la ETA y el movimiento real",
+    copy: "La app muestra ruta viva, estado del viaje y acceso rápido a SOS, chat y compartir. Todo pensado para usarlo con una mano.",
+    stats: [
+      { label: "Tracking", value: "En vivo" },
+      { label: "Seguridad", value: "SOS visible" },
+      { label: "Experiencia", value: "Modo app" },
+    ],
+    gradient: "from-slate-900 via-slate-800 to-indigo-950",
+    accent: "#bae6fd",
+  },
+  {
+    eyebrow: "Passenger P2P",
+    title: "Más opciones, más control, más claridad",
+    copy: "Comparas vehículos, ves tarifas antes de pedir y mantienes la relación comercial transparente: plataforma SaaS, conductor independiente.",
+    stats: [
+      { label: "Opciones", value: "Economy · Premium" },
+      { label: "Modelo", value: "Passenger P2P" },
+      { label: "Transparencia", value: "Visible" },
+    ],
+    gradient: "from-fuchsia-600 via-rose-600 to-orange-500",
+    accent: "#fbcfe8",
+  },
+];
 
 export default function ClientDashboard() {
   const { user, isAuthenticated, logout } = useLocalAuth();
@@ -62,6 +113,7 @@ export default function ClientDashboard() {
   const [selectedVehicle, setSelectedVehicle] = useState("economy");
   const [loyaltyPoints, setLoyaltyPoints] = useState(120);
   const [activePanel, setActivePanel] = useState<ActivePanel>("request");
+  const [marketSlideIndex, setMarketSlideIndex] = useState(0);
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
   const [scheduledDate, setScheduledDate] = useState("");
@@ -77,9 +129,10 @@ export default function ClientDashboard() {
   const [selectedParcel, setSelectedParcel] = useState<ParcelOrder | null>(null);
   const [showParcelTracking, setShowParcelTracking] = useState(false);
   const PARCELS_KEY = "wt_parcel_orders";
+  const { data: serverParcelOrders } = trpc.parcels.listByClient.useQuery(undefined, { enabled: isAuthenticated });
 
   const mapRef = useRef<LeafletMapRef | null>(null);
-  const driverAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const driverAnimRef = useRef<number | null>(null);
   const [driverEta, setDriverEta] = useState<string | null>(null);
   const [driverDistance, setDriverDistance] = useState<string | null>(null);
 
@@ -139,6 +192,24 @@ export default function ClientDashboard() {
 
   useEffect(() => { if (!isAuthenticated) navigate("/login"); }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    if (serverParcelOrders && Array.isArray(serverParcelOrders) && serverParcelOrders.length > 0) {
+      const normalized = (serverParcelOrders as any[]).map((order) => normalizeParcelOrder(order));
+      setParcelOrders(normalized);
+      sessionStorage.setItem(PARCELS_KEY, JSON.stringify(normalized));
+      return;
+    }
+
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(PARCELS_KEY) || "[]");
+      if (stored.length > 0) {
+        setParcelOrders(stored.map((order: any) => normalizeParcelOrder(order)));
+      }
+    } catch {}
+  }, [isAuthenticated, serverParcelOrders]);
+
   // Poll for driver acceptance
   useEffect(() => {
     if (tripStatus !== "searching") return;
@@ -169,6 +240,11 @@ export default function ClientDashboard() {
     addPersistedNotif(message, { type, sound: soundMap[type] || "info", url: "/client-dashboard" });
     if (pushTitle) sendNotification(pushTitle, { body: pushBody || message, url: "/client-dashboard", tag: "trip-update" });
   }, [addPersistedNotif, sendNotification]);
+
+  const handleParcelStatusUpdate = useCallback((order: ParcelOrder, status: ParcelOrder['status'], title: string, body: string) => {
+    setParcelOrders(prev => prev.map(item => item.id === order.id ? { ...item, status } : item));
+    addNotification(body, status === 'delivered' ? 'success' : 'info', title, body);
+  }, [addNotification]);
 
   const calculateRoute = useCallback(async (pickup: { lat: number; lng: number }, dropoff: { lat: number; lng: number }) => {
     if (!mapRef.current) return;
@@ -201,31 +277,36 @@ export default function ClientDashboard() {
       lat: pickup.lat + (Math.random() > 0.5 ? 1 : -1) * (0.003 + Math.random() * spread),
       lng: pickup.lng + (Math.random() > 0.5 ? 1 : -1) * (0.003 + Math.random() * spread),
     };
-    let step = 0;
-    const totalSteps = 60;
+    const liveTrip = {
+      tripId: currentTrip?.id,
+      phase: "approaching",
+      pickup,
+      driverStart: driverPos,
+      driverName: currentTrip?.driver?.name || "Conductor",
+      updatedAt: Date.now(),
+    };
+
     if (driverAnimRef.current) clearInterval(driverAnimRef.current);
-    driverAnimRef.current = setInterval(() => {
-      step++;
-      driverPos = {
-        lat: driverPos.lat + (pickup.lat - driverPos.lat) * 0.06 + (Math.random() - 0.5) * 0.0001,
-        lng: driverPos.lng + (pickup.lng - driverPos.lng) * 0.06 + (Math.random() - 0.5) * 0.0001,
-      };
-      mapRef.current?.panTo(driverPos.lat, driverPos.lng);
-      const distLat = Math.abs(pickup.lat - driverPos.lat) * 111000;
-      const distLng = Math.abs(pickup.lng - driverPos.lng) * 111000 * Math.cos(pickup.lat * Math.PI / 180);
-      const distM = Math.sqrt(distLat * distLat + distLng * distLng);
-      const etaMin = Math.ceil(Math.max(0, distM / 8) / 60);
-      setDriverDistance(distM < 1000 ? `${Math.round(distM)} m` : `${(distM / 1000).toFixed(1)} km`);
-      setDriverEta(etaMin <= 1 ? "Menos de 1 min" : `${etaMin} min`);
-      if (distM < 30 || step >= totalSteps) {
-        clearInterval(driverAnimRef.current!);
-        driverAnimRef.current = null;
-        setDriverEta("¡Llegó!");
-        setDriverDistance("0 m");
-        setTripStatus("in_progress");
+    localStorage.setItem(LIVE_TRIP_KEY, JSON.stringify(liveTrip));
+
+    mapRef.current?.setRouteBetween(
+      { lat: driverPos.lat, lng: driverPos.lng, label: liveTrip.driverName },
+      { lat: pickup.lat, lng: pickup.lng, label: "Tu ubicación" },
+      { vehicleEmoji: "🚕", vehicleLabel: liveTrip.driverName, animate: true }
+    ).then((route) => {
+      if (route) {
+        setDriverEta(route.durationMin <= 1 ? "Menos de 1 min" : `${route.durationMin} min`);
+        setDriverDistance(route.distanceKm < 1 ? `${Math.round(route.distanceKm * 1000)} m` : `${route.distanceKm.toFixed(1)} km`);
       }
-    }, 2000);
-  }, []);
+    });
+
+    driverAnimRef.current = window.setTimeout(() => {
+      setDriverEta("¡Llegó!");
+      setDriverDistance("0 m");
+      setTripStatus("in_progress");
+      localStorage.setItem(LIVE_TRIP_KEY, JSON.stringify({ ...liveTrip, phase: "arrived", updatedAt: Date.now() }));
+    }, 7000);
+  }, [currentTrip?.driver?.name, currentTrip?.id]);
 
   const handleMapReady = useCallback((ref: LeafletMapRef) => {
     mapRef.current = ref;
@@ -314,6 +395,7 @@ export default function ClientDashboard() {
       localStorage.setItem(TRIPS_KEY, JSON.stringify(trips.filter((t: any) => t.id !== currentTrip.id)));
     }
     setTripStatus("idle"); setCurrentTrip(null);
+    localStorage.removeItem(LIVE_TRIP_KEY);
     addNotification("Viaje cancelado", "warning");
   };
 
@@ -330,6 +412,7 @@ export default function ClientDashboard() {
     setLoyaltyPoints(p => p + 50);
     toast.success("¡Gracias por tu calificación! +50 puntos");
     setTripStatus("idle"); setCurrentTrip(null); setDriverRating(0); setDriverComment("");
+    localStorage.removeItem(LIVE_TRIP_KEY);
   };
 
   const handleCallDriver = () => {
@@ -341,6 +424,16 @@ export default function ClientDashboard() {
     setChatOpen(true);
   };
 
+  const handleCreateParcel = useCallback((order: ParcelOrder) => {
+    const normalized = normalizeParcelOrder(order as unknown as Parameters<typeof normalizeParcelOrder>[0]);
+    setParcelOrders(prev => {
+      const next = [normalized, ...prev];
+      sessionStorage.setItem(PARCELS_KEY, JSON.stringify(next));
+      return next;
+    });
+    addNotification(`📦 Paquete creado con código ${order.trackingCode}`, 'info', 'Paquete creado', `Tu paquete está pendiente de aceptación. Código: ${order.trackingCode}`);
+  }, [addNotification]);
+
   const handleSOS = () => {
     const msg = `🚨 EMERGENCIA - Pasajero: ${user?.name} | Viaje: ${currentTrip?.pickup} → ${currentTrip?.dropoff} | Conductor: ${currentTrip?.driver?.name || "N/A"} | Placa: ${currentTrip?.driver?.plate || "N/A"}`;
     if (navigator.share) { navigator.share({ title: "SOS Emergencia", text: msg }); }
@@ -349,7 +442,7 @@ export default function ClientDashboard() {
   };
 
   const handleShareTrip = () => {
-    const text = `Estoy en un viaje con WhatsApp Taxi 🚕\nConductor: ${currentTrip?.driver?.name}\nVehículo: ${currentTrip?.driver?.vehicle} (${currentTrip?.driver?.plate})\nDesde: ${currentTrip?.pickup}\nHacia: ${currentTrip?.dropoff}`;
+    const text = `Estoy en un viaje con Passenger 🚕\nConductor: ${currentTrip?.driver?.name}\nVehículo: ${currentTrip?.driver?.vehicle} (${currentTrip?.driver?.plate})\nDesde: ${currentTrip?.pickup}\nHacia: ${currentTrip?.dropoff}`;
     if (navigator.share) { navigator.share({ title: "Compartir viaje", text }); }
     else { navigator.clipboard.writeText(text); toast.success("Información del viaje copiada"); }
   };
@@ -365,6 +458,23 @@ export default function ClientDashboard() {
     loyaltyPoints < 500 ? { name: "Plata", color: "text-slate-400", next: 500 } :
     loyaltyPoints < 1000 ? { name: "Oro", color: "text-yellow-500", next: 1000 } :
     { name: "Platino", color: "text-purple-500", next: 9999 };
+
+  const mascotState =
+    tripStatus === "searching"
+      ? { mood: "searching" as const, text: "Buscando conductor cerca de ti..." }
+      : tripStatus === "accepted"
+      ? { mood: "ready" as const, text: "Tu conductor acepto. Va en camino." }
+      : tripStatus === "in_progress"
+      ? { mood: "happy" as const, text: "Todo va bien. Disfruta tu viaje." }
+      : { mood: "idle" as const, text: "Listo para ayudarte en tu proximo viaje." };
+
+  useEffect(() => {
+    if (tripStatus !== "idle" || activePanel !== "request") return;
+    const interval = window.setInterval(() => {
+      setMarketSlideIndex((current) => (current + 1) % MARKET_SLIDES.length);
+    }, 4500);
+    return () => window.clearInterval(interval);
+  }, [activePanel, tripStatus]);
 
   if (!isAuthenticated) return null;
 
@@ -434,11 +544,18 @@ export default function ClientDashboard() {
           <button onClick={() => setPendingTripBanner(null)} className="ml-3 text-white/80 hover:text-white">✕</button>
         </div>
       )}
+      <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3">
+        <PassengerMascot mood={mascotState.mood} size="sm" animated className="shrink-0" />
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-700 font-semibold">Asistente Passenger</p>
+          <p className="text-sm text-slate-700">{mascotState.text}</p>
+        </div>
+      </div>
       {/* Main content — fills remaining height */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0" style={{ height: 'calc(100vh - 65px)' }}>
 
         {/* MAPA — altura explícita garantizada */}
-        <div className="relative lg:flex-1" style={{ height: '45vw', minHeight: '220px', maxHeight: '320px' }}>
+        <div className="relative lg:flex-1" style={{ height: '56vw', minHeight: '260px', maxHeight: '420px' }}>
           {/* En desktop, ocupa todo el espacio restante */}
           <style>{`@media (min-width: 1024px) { .map-container { height: 100% !important; max-height: none !important; } }`}</style>
           <LeafletMap
@@ -465,6 +582,14 @@ export default function ClientDashboard() {
             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white rounded-full px-4 py-2 shadow-lg flex items-center gap-2 z-10">
               <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
               <span className="text-sm font-medium text-slate-900">Buscando conductor...</span>
+            </div>
+          )}
+          {tripStatus === "searching" && (
+            <div className="absolute left-4 bottom-4 z-10 rounded-2xl border border-emerald-200 bg-white/95 p-3 shadow-lg">
+              <div className="flex items-center gap-2">
+                <PassengerMascot mood="searching" size="sm" animated />
+                <p className="text-xs font-medium text-emerald-800">Estoy revisando opciones para ti</p>
+              </div>
             </div>
           )}
           {(tripStatus === "accepted" || tripStatus === "in_progress") && currentTrip?.driver && (
@@ -510,6 +635,85 @@ export default function ClientDashboard() {
             {/* SOLICITAR VIAJE */}
             {tripStatus === "idle" && activePanel === "request" && (
               <div className="p-4 flex flex-col gap-3">
+                <div className="overflow-hidden rounded-3xl border border-slate-900/10 bg-slate-950 text-white shadow-xl">
+                  <div className="flex items-center justify-between px-4 pt-4 text-[11px] uppercase tracking-[0.35em] text-emerald-200">
+                    <span>Passenger Live</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setMarketSlideIndex((current) => (current - 1 + MARKET_SLIDES.length) % MARKET_SLIDES.length)}
+                        className="rounded-full border border-white/15 bg-white/10 p-1 text-white/80 hover:bg-white/20"
+                        aria-label="Slide anterior"
+                      >
+                        <ChevronRight size={14} className="rotate-180" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMarketSlideIndex((current) => (current + 1) % MARKET_SLIDES.length)}
+                        className="rounded-full border border-white/15 bg-white/10 p-1 text-white/80 hover:bg-white/20"
+                        aria-label="Slide siguiente"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative px-4 pb-4 pt-3">
+                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                      <div
+                        className="flex transition-transform duration-700 ease-out"
+                        style={{ width: `${MARKET_SLIDES.length * 100}%`, transform: `translateX(-${marketSlideIndex * (100 / MARKET_SLIDES.length)}%)` }}
+                      >
+                        {MARKET_SLIDES.map((slide) => (
+                          <div key={slide.title} className="w-full shrink-0 p-4" style={{ width: `${100 / MARKET_SLIDES.length}%` }}>
+                            <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${slide.gradient} p-4 shadow-lg`}>
+                              <div className="absolute inset-0 opacity-25" style={{ background: `radial-gradient(circle at top right, ${slide.accent}, transparent 42%)` }} />
+                              <div className="relative flex items-start justify-between gap-3">
+                                <div className="max-w-[72%]">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/85">{slide.eyebrow}</p>
+                                  <h3 className="mt-2 text-xl font-black leading-tight text-white">{slide.title}</h3>
+                                  <p className="mt-2 text-sm leading-5 text-white/88">{slide.copy}</p>
+                                </div>
+                                <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-right backdrop-blur-sm">
+                                  <p className="text-[10px] uppercase tracking-[0.25em] text-white/70">Live</p>
+                                  <p className="text-lg font-black text-white">App</p>
+                                </div>
+                              </div>
+                              <div className="relative mt-4 grid grid-cols-3 gap-2">
+                                {slide.stats.map((stat) => (
+                                  <div key={stat.label} className="rounded-xl border border-white/10 bg-white/10 px-2 py-2 backdrop-blur-sm">
+                                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/65">{stat.label}</p>
+                                    <p className="mt-1 text-xs font-bold text-white">{stat.value}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between px-4 pb-4">
+                    <div className="flex items-center gap-1.5">
+                      {MARKET_SLIDES.map((slide, index) => (
+                        <button
+                          key={slide.title}
+                          type="button"
+                          onClick={() => setMarketSlideIndex(index)}
+                          className={`h-1.5 rounded-full transition-all ${marketSlideIndex === index ? "w-8 bg-white" : "w-3 bg-white/35 hover:bg-white/50"}`}
+                          aria-label={`Ir al slide ${index + 1}`}
+                        />
+                      ))}
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => setActivePanel("request")}
+                      className="h-8 rounded-full bg-white px-3 text-xs font-semibold text-slate-950 hover:bg-emerald-50"
+                    >
+                      Pedir viaje
+                    </Button>
+                  </div>
+                </div>
+
                 <h2 className="text-lg font-bold text-slate-900">¿A dónde vamos?</h2>
 
                 {/* Lugares guardados */}
@@ -531,6 +735,7 @@ export default function ClientDashboard() {
                       onSelect={handlePickupSelect}
                       placeholder="¿Desde dónde te recogemos?"
                       icon={<span className="w-3 h-3 rounded-full inline-block bg-green-500" />}
+                      autoLocate
                     />
                   </div>
                   <button onClick={handleGetMyLocation} disabled={gettingLocation} className="px-3 py-3 rounded-xl border border-slate-200 hover:bg-green-50 transition-colors" title="Mi ubicación">
@@ -685,7 +890,7 @@ export default function ClientDashboard() {
                 <div><label className="block text-sm font-medium text-slate-700 mb-1">Hora</label>
                   <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" /></div>
-                <NominatimAutocomplete value={pickupLocation} onChange={setPickupLocation} onSelect={handlePickupSelect} placeholder="¿Dónde te recogemos?" icon={<span className="w-3 h-3 rounded-full inline-block bg-green-500" />} />
+                <NominatimAutocomplete value={pickupLocation} onChange={setPickupLocation} onSelect={handlePickupSelect} placeholder="¿Dónde te recogemos?" icon={<span className="w-3 h-3 rounded-full inline-block bg-green-500" />} autoLocate />
                 <NominatimAutocomplete value={dropoffLocation} onChange={setDropoffLocation} onSelect={handleDropoffSelect} placeholder="¿A dónde vas?" icon={<span className="w-3 h-3 rounded-full border-2 border-red-500 inline-block" />} countryCode={userCountryCode} viewbox={userViewbox} />
                 <Button onClick={() => { if (scheduledDate && scheduledTime && pickupLocation && dropoffLocation) { handleRequestTrip(); setActivePanel("request"); } else { toast.error("Completa todos los campos"); } }}
                   className="w-full py-3 font-bold" style={{ background: "oklch(0.76 0.18 148)", color: "oklch(0.08 0.02 148)" }}>

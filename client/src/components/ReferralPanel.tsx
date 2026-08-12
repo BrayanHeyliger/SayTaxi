@@ -115,15 +115,15 @@ export default function ReferralPanel({ userId, userName, userRole }: ReferralPa
 
   const handleShareWhatsApp = () => {
     const text = userRole === "client"
-      ? `¡Únete a WhatsApp Taxi con mi código *${myCode?.code}* y obtén un descuento en tu primer viaje! 🚕\n${referralLink}`
-      : `¡Únete como conductor en WhatsApp Taxi con mi código *${myCode?.code}* y gana un bono de bienvenida! 🚗\n${referralLink}`;
+      ? `¡Únete a Passenger con mi código *${myCode?.code}* y obtén un descuento en tu primer viaje! 🚕\n${referralLink}`
+      : `¡Únete como conductor en Passenger con mi código *${myCode?.code}* y gana un bono de bienvenida! 🚗\n${referralLink}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const handleShareGeneral = () => {
     if (navigator.share) {
       navigator.share({
-        title: "WhatsApp Taxi",
+        title: "Passenger",
         text: `Usa mi código ${myCode?.code} y obtén recompensas`,
         url: referralLink,
       });

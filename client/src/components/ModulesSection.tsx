@@ -1,5 +1,5 @@
 /**
- * ModulesSection — WhatsApp Taxi SaaS
+ * ModulesSection — Passenger
  * Design: Verde Operacional — tabs con módulos A/B/C, dark bg
  */
 import { useState, useRef, useEffect } from "react";

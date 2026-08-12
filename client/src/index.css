@@ -4,8 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* =============================================
-   WhatsApp Taxi SaaS — Design System
-   Theme: Verde Operacional
+   PASSENGER — Design System
+   Theme: Premium Marketplace
    Primary: #25D366 (WhatsApp Green)
    Display Font: Sora | Body Font: Inter
    ============================================= */
@@ -305,3 +305,222 @@
 .wt-header            { z-index: 1000 !important; }
 .wt-notification-panel { z-index: 9999 !important; }
 .wt-safety-btn        { z-index: 9998 !important; }
+
+/* Modern Leaflet skin */
+.wt-leaflet-map {
+  border-radius: 16px;
+}
+
+.wt-leaflet-map .leaflet-container {
+  border-radius: 16px;
+  background: oklch(0.95 0.004 100);
+}
+
+.wt-leaflet-map .leaflet-control-zoom {
+  border: 1px solid oklch(0.85 0.01 100 / 0.8) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 14px 28px -20px rgba(0, 0, 0, 0.45);
+}
+
+.wt-leaflet-map .leaflet-control-zoom a {
+  width: 34px;
+  height: 34px;
+  line-height: 34px;
+  border: 0 !important;
+  background: oklch(1 0 0 / 0.92);
+  color: oklch(0.32 0.02 250);
+  transition: all 180ms ease;
+}
+
+.wt-leaflet-map .leaflet-control-zoom a:hover {
+  background: oklch(0.76 0.18 148 / 0.18);
+  color: oklch(0.34 0.08 148);
+}
+
+.wt-leaflet-map .leaflet-control-zoom a.leaflet-disabled {
+  color: oklch(0.65 0.01 100);
+  background: oklch(0.98 0.002 100 / 0.95);
+}
+
+/* =============================================
+   PASSENGER - Animations & Transitions
+   ============================================= */
+
+/* Auto Search Loading Animation */
+@keyframes car-search {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-car-search {
+  animation: car-search 1.8s ease-in-out infinite;
+}
+
+/* Pulse Waves Animation (Signal) */
+@keyframes pulse-waves {
+  0%, 100% {
+    transform: scale(0.95);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-waves {
+  animation: pulse-waves 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Bounce Animation */
+@keyframes bounce-gentle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.animate-bounce-gentle {
+  animation: bounce-gentle 1.2s ease-in-out infinite;
+}
+
+/* Float Animation (Smooth hover effect) */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Spin Rotate Animation (Loading spinner) */
+@keyframes spin-soft {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-soft {
+  animation: spin-soft 3s linear infinite;
+}
+
+/* Glow Effect */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s infinite;
+}
+
+/* Slide In From Bottom */
+@keyframes slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out;
+}
+
+/* Confetti Celebration */
+@keyframes confetti-fall {
+  to {
+    transform: translateY(100vh) rotateZ(360deg);
+    opacity: 0;
+  }
+}
+
+.animate-confetti {
+  animation: confetti-fall 3s ease-in forwards;
+  position: fixed;
+  pointer-events: none;
+}
+
+/* Shake Animation (Error/Alert) */
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+/* Fade in */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Mascot loading strip */
+@keyframes mascot-walk {
+  0% {
+    transform: translateX(-58%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(58%);
+    opacity: 0;
+  }
+}
+
+.animate-mascot-walk {
+  animation: mascot-walk 2.4s ease-in-out infinite;
+}

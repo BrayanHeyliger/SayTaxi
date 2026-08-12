@@ -1,5 +1,5 @@
 /**
- * BotDemoAnimation — Demostración animada del bot WhatsApp Taxi SaaS
+ * BotDemoAnimation — Demostración animada del bot Passenger
  * Design: Verde Operacional — simulación de WhatsApp con burbujas animadas
  * Duración: 60 segundos con loop automático
  */

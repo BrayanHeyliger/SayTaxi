@@ -51,7 +51,7 @@ const trpcClient = trpc.createClient({
         // session into sessionStorage so we can forward it as a Bearer token.
         // The regular OAuth cookie flow keeps working and takes priority server-side.
         try {
-          const raw = sessionStorage.getItem("manus-cookie");
+          const raw = sessionStorage.getItem("wt-session-cookie-mirror");
           if (raw) {
             const prefix = `${COOKIE_NAME}=`;
             const pair = raw.split(";").find(s => s.trim().startsWith(prefix));
@@ -74,6 +74,23 @@ const trpcClient = trpc.createClient({
     }),
   ],
 });
+
+const injectAnalyticsScript = () => {
+  const endpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT as string | undefined;
+  const websiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined;
+
+  if (!endpoint || !websiteId) {
+    return;
+  }
+
+  const script = document.createElement("script");
+  script.defer = true;
+  script.src = endpoint.replace(/\/$/, "") + "/umami";
+  script.setAttribute("data-website-id", websiteId);
+  document.body.appendChild(script);
+};
+
+injectAnalyticsScript();
 
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>

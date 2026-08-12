@@ -1,5 +1,5 @@
 /**
- * TechStackSection — WhatsApp Taxi SaaS
+ * TechStackSection — Passenger
  * Design: Verde Operacional — stack tecnológico con badges y diagrama
  */
 import { useRef, useEffect, useState } from "react";

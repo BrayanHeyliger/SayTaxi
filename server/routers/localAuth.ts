@@ -4,6 +4,10 @@ import { getDb } from "../db";
 import { users, clients, drivers } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
+import { ENV } from "../_core/env";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { getSessionCookieOptions } from "../_core/cookies";
+import { sdk } from "../_core/sdk";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
@@ -15,14 +19,33 @@ export const localAuthRouter = router({
       email: z.string().email(),
       password: z.string().min(1),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error("Base de datos no disponible");
 
-      // Check for super admin
-      if (input.email === "admin@whatsapptaxi.com" && input.password === "Hosting01") {
-        return { id: 0, name: "Heyliger", email: "admin@whatsapptaxi.com", role: "admin" as const };
+      // Check for super admin via environment variables (avoid hardcoded creds)
+      if (
+        ENV.superAdminEmail &&
+        ENV.superAdminPassword &&
+        input.email === ENV.superAdminEmail &&
+        input.password === ENV.superAdminPassword
+      ) {
+        const openId = `local_admin_${input.email}`;
+        if (db) {
+          // Ensure super admin user exists in DB
+          const [existing] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+          if (!existing) {
+            await db.insert(users).values({ openId, name: "Super Admin", email: input.email, role: "admin", loginMethod: "local" });
+          }
+        }
+
+        const sessionToken = await sdk.createSessionToken(openId, { name: "Super Admin", expiresInMs: ONE_YEAR_MS });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+        return { id: 0, name: "Super Admin", email: ENV.superAdminEmail, role: "admin" as const };
       }
+
+      if (!db) throw new Error("Base de datos no disponible");
 
       // Find user by email
       const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
@@ -34,6 +57,12 @@ export const localAuthRouter = router({
         const inputHash = hashPassword(input.password);
         if (storedHash !== inputHash) throw new Error("Credenciales incorrectas");
       }
+      // Create session cookie for authenticated user
+      const userOpenId = (user as any).openId as string;
+      const sessionToken = await sdk.createSessionToken(userOpenId, { name: user.name || "", expiresInMs: ONE_YEAR_MS });
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
       return {
         id: user.id,
         name: user.name || "Usuario",

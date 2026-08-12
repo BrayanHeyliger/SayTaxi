@@ -72,7 +72,7 @@ const translations: Record<Lang, Translations> = {
       ]},
     },
     pricing: { badge: "Planes", title: "Precios transparentes, sin sorpresas", sub: "Elige el plan que mejor se adapte a tu flota", monthly: "Mensual", annual: "Anual", save: "Ahorra 20%", popular: "Más popular", getStarted: "Empezar ahora", contact: "Contactar ventas" },
-    cta: { title: "¿Listo para modernizar tu flota?", sub: "Únete a más de 2,400 empresas de taxi que ya usan WhatsApp Taxi", client: "Pedir un Viaje", driver: "Ser Chofer" },
+    cta: { title: "¿Listo para tu próximo viaje?", sub: "Únete a miles de usuarios en Passenger", client: "Pedir un Viaje", driver: "Ser Chofer" },
     footer: { rights: "Todos los derechos reservados", privacy: "Privacidad", terms: "Términos", support: "Soporte" },
     login: { title: "Bienvenido de vuelta", sub: "Ingresa a tu cuenta", email: "Correo electrónico", password: "Contraseña", submit: "Iniciar sesión", noAccount: "¿No tienes cuenta?", register: "Regístrate", forgot: "¿Olvidaste tu contraseña?" },
     register: { title: "Crear cuenta", sub: "Elige cómo quieres usar la plataforma", asClient: "Soy Cliente", asDriver: "Soy Conductor", asFleet: "Empresa / Flotilla", clientDesc: "Pide viajes fácilmente", driverDesc: "Gana dinero conduciendo", fleetDesc: "Gestiona tu propia flota", name: "Nombre completo", email: "Correo electrónico", phone: "Teléfono", password: "Contraseña", submit: "Crear cuenta", haveAccount: "¿Ya tienes cuenta?", login: "Inicia sesión" },

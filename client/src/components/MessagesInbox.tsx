@@ -221,7 +221,7 @@ export default function MessagesInbox() {
                 {/* Action buttons */}
                 <div className="flex gap-2 mt-4 flex-wrap">
                   <a
-                    href={`mailto:${selected.email}?subject=Re: Tu mensaje en WhatsApp Taxi`}
+                    href={`mailto:${selected.email}?subject=Re: Tu mensaje en Passenger`}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-90"
                     style={{ background: "oklch(0.76 0.18 148)", color: "oklch(0.08 0.02 148)" }}
                     onClick={() => handleUpdateStatus(selected.id, "replied")}

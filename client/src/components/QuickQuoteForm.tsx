@@ -2,7 +2,7 @@
  * QuickQuoteForm — Mini formulario de cotización rápida
  * Genera un mensaje de WhatsApp automático con origen, destino y hora
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MapPin, Navigation, Clock, MessageCircle, ChevronRight } from "lucide-react";
 import { useSiteConfig } from "@/contexts/SiteConfigContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -30,10 +30,11 @@ export default function QuickQuoteForm() {
       async (pos) => {
         try {
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`
+            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
+            { headers: { "Accept-Language": "es,en;q=0.9" } }
           );
           const data = await res.json();
-          const address = data.display_name?.split(",").slice(0, 3).join(", ") || "Mi ubicación actual";
+          const address = data.display_name?.split(",").slice(0, 2).join(", ") || "Mi ubicación actual";
           setOrigin(address);
         } catch {
           setOrigin(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
@@ -43,6 +44,10 @@ export default function QuickQuoteForm() {
       () => setGettingLocation(false)
     );
   };
+
+  useEffect(() => {
+    if (!origin) handleGetLocation();
+  }, []);
 
   const handleSendToWhatsApp = () => {
     if (!origin || !destination) return;

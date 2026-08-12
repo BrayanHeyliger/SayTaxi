@@ -1,5 +1,8 @@
 import { TRPCError } from "@trpc/server";
-import { ENV } from "./env";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+
+const HEARTBEAT_STORE = path.resolve(process.cwd(), "server", "_data", "heartbeat-jobs.json");
 
 export type HeartbeatJob = {
   name: string;
@@ -42,81 +45,33 @@ export type HeartbeatJobInfo = {
 
 const SERVICE = "webdevtoken.v1.WebDevService";
 
-const buildEndpoint = (rpc: string): string => {
-  if (!ENV.forgeApiUrl) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Heartbeat service URL is not configured (BUILT_IN_FORGE_API_URL).",
-    });
-  }
-  if (!ENV.forgeApiKey) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Heartbeat service API key is not configured (BUILT_IN_FORGE_API_KEY).",
-    });
-  }
-  const baseUrl = ENV.forgeApiUrl;
-  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  return new URL(`${SERVICE}/${rpc}`, normalizedBase).toString();
+type StoredHeartbeatJob = HeartbeatJob & {
+  taskUid: string;
+  userSession: string;
+  isEnable: boolean;
+  createdAt: string;
+  lastExecutedAt?: string | null;
+  nextExecutionAt?: string | null;
 };
 
-const callForge = async <T>(
-  rpc: string,
-  body: Record<string, unknown>,
-  userSession: string
-): Promise<T> => {
-  const endpoint = buildEndpoint(rpc);
-  const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${ENV.forgeApiKey}`,
-    "content-type": "application/json",
-    "connect-protocol-version": "1",
-  };
-  // userSession is the decoded `app_session_id` cookie value (NOT the raw
-  // Cookie header). Empty string falls back to the project owner identity.
-  if (userSession) {
-    headers["x-manus-user-session"] = userSession;
-  }
-
-  let response: Response;
+async function readStore(): Promise<StoredHeartbeatJob[]> {
   try {
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-  } catch (error) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: `Heartbeat ${rpc} network error: ${String(error)}`,
-    });
+    const raw = await fs.readFile(HEARTBEAT_STORE, "utf-8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as StoredHeartbeatJob[]) : [];
+  } catch {
+    return [];
   }
+}
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw mapForgeError(response, detail, rpc);
-  }
-  return (await response.json()) as T;
-};
+async function writeStore(jobs: StoredHeartbeatJob[]): Promise<void> {
+  await fs.mkdir(path.dirname(HEARTBEAT_STORE), { recursive: true });
+  await fs.writeFile(HEARTBEAT_STORE, JSON.stringify(jobs, null, 2), "utf-8");
+}
 
-const mapForgeError = (
-  response: Response,
-  detail: string,
-  rpc: string
-): TRPCError => {
-  const status = response.status;
-  let code: TRPCError["code"] = "INTERNAL_SERVER_ERROR";
-  if (status === 401) code = "UNAUTHORIZED";
-  else if (status === 403) code = "FORBIDDEN";
-  else if (status === 404) code = "NOT_FOUND";
-  else if (status === 400 || status === 422) code = "BAD_REQUEST";
-  else if (status === 409) code = "CONFLICT";
-  else if (status === 429) code = "TOO_MANY_REQUESTS";
-  return new TRPCError({
-    code,
-    message: `Heartbeat ${rpc} failed (${status})${detail ? `: ${detail}` : ""}`,
-  });
-};
+function resolveActorUserId(userSession: string): string {
+  return userSession || "local-owner";
+}
 
 const stringifyPayload = (payload: unknown): string => {
   if (payload === undefined || payload === null) return "{}";
@@ -142,18 +97,19 @@ export async function createHeartbeatJob(
   userSession: string
 ): Promise<{ taskUid: string; nextExecutionAt?: string | null }> {
   validateCallbackPath(job.path);
-  return callForge<{ taskUid: string; nextExecutionAt?: string | null }>(
-    "CreateHeartbeatJob",
-    {
-      name: job.name,
-      cronExpression: job.cron,
-      callbackPath: job.path,
-      callbackMethod: job.method ?? "POST",
-      callbackPayload: stringifyPayload(job.payload),
-      description: job.description ?? "",
-    },
-    userSession
-  );
+  const jobs = await readStore();
+  const taskUid = `local_${crypto.randomUUID()}`;
+  const nextExecutionAt = null;
+  jobs.push({
+    ...job,
+    taskUid,
+    userSession,
+    isEnable: true,
+    createdAt: new Date().toISOString(),
+    nextExecutionAt,
+  });
+  await writeStore(jobs);
+  return { taskUid, nextExecutionAt };
 }
 
 /**
@@ -166,20 +122,22 @@ export async function updateHeartbeatJob(
   userSession: string
 ): Promise<{ nextExecutionAt?: string | null }> {
   if (patch.path !== undefined) validateCallbackPath(patch.path);
-  const body: Record<string, unknown> = { taskUid };
-  if (patch.cron !== undefined) body.cronExpression = patch.cron;
-  if (patch.path !== undefined) body.callbackPath = patch.path;
-  if (patch.method !== undefined) body.callbackMethod = patch.method;
-  if (patch.payload !== undefined) {
-    body.callbackPayload = stringifyPayload(patch.payload);
+  const jobs = await readStore();
+  const job = jobs.find((entry) => entry.taskUid === taskUid);
+  if (!job) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Heartbeat job not found" });
   }
-  if (patch.description !== undefined) body.description = patch.description;
-  if (patch.enable !== undefined) body.enable = patch.enable;
-  return callForge<{ nextExecutionAt?: string | null }>(
-    "UpdateHeartbeatJob",
-    body,
-    userSession
-  );
+  if (job.userSession !== userSession) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Cannot update another session's heartbeat job" });
+  }
+  if (patch.cron !== undefined) job.cron = patch.cron;
+  if (patch.path !== undefined) job.path = patch.path;
+  if (patch.method !== undefined) job.method = patch.method;
+  if (patch.payload !== undefined) job.payload = patch.payload;
+  if (patch.description !== undefined) job.description = patch.description;
+  if (patch.enable !== undefined) job.isEnable = patch.enable;
+  await writeStore(jobs);
+  return { nextExecutionAt: job.nextExecutionAt ?? null };
 }
 
 /** Delete a cron located by `taskUid`. Idempotent on caller side. */
@@ -187,7 +145,9 @@ export async function deleteHeartbeatJob(
   taskUid: string,
   userSession: string
 ): Promise<void> {
-  await callForge("DeleteHeartbeatJob", { taskUid }, userSession);
+  const jobs = await readStore();
+  const nextJobs = jobs.filter((entry) => entry.taskUid !== taskUid || entry.userSession !== userSession);
+  await writeStore(nextJobs);
 }
 
 /**
@@ -202,12 +162,29 @@ export async function listHeartbeatJobs(
   userSession: string,
   pagination?: { page?: number; pageSize?: number }
 ): Promise<{ total: number; actorUserId: string; jobs: HeartbeatJobInfo[] }> {
-  const body: Record<string, unknown> = {};
-  if (pagination?.page !== undefined) body.page = pagination.page;
-  if (pagination?.pageSize !== undefined) body.pageSize = pagination.pageSize;
-  return callForge<{
-    total: number;
-    actorUserId: string;
-    jobs: HeartbeatJobInfo[];
-  }>("ListHeartbeatJobs", body, userSession);
+  const jobs = await readStore();
+  const actorUserId = resolveActorUserId(userSession);
+  const filtered = jobs.filter((entry) => entry.userSession === userSession);
+  const pageSize = Math.max(1, pagination?.pageSize ?? filtered.length || 20);
+  const page = Math.max(1, pagination?.page ?? 1);
+  const start = (page - 1) * pageSize;
+  const sliced = filtered.slice(start, start + pageSize);
+  return {
+    total: filtered.length,
+    actorUserId,
+    jobs: sliced.map((job) => ({
+      taskUid: job.taskUid,
+      name: job.name,
+      userId: actorUserId,
+      description: job.description ?? "",
+      cronExpression: job.cron,
+      callbackPath: job.path,
+      callbackMethod: job.method ?? "POST",
+      callbackPayload: stringifyPayload(job.payload),
+      isEnable: job.isEnable,
+      createdAt: job.createdAt,
+      lastExecutedAt: job.lastExecutedAt ?? null,
+      nextExecutionAt: job.nextExecutionAt ?? null,
+    })),
+  };
 }

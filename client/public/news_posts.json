@@ -1,0 +1,32 @@
+[
+  {
+    "id": "news-1",
+    "title": "Panel de Administración renovado — seguridad y control",
+    "summary": "Hemos endurecido permisos y convertido las acciones críticas en funciones administrativas seguras.",
+    "content": "Se reforzaron endpoints administrativos, ahora requieren rol admin a nivel servidor, se corrigieron credenciales hardcodeadas y se añadió soporte para sesiones locales. Esto evita accesos no autorizados y facilita la gestión centralizada desde el panel.",
+    "publishedAt": "2026-08-10T12:00:00Z",
+    "author": "Equipo SayTaxi",
+    "tags": ["seguridad", "admin"],
+    "featured": true
+  },
+  {
+    "id": "news-2",
+    "title": "Soporte LLM mejorado: Codeium y LocalAI",
+    "summary": "Integramos Codeium y añadimos soporte para LocalAI para usar LLMs locales sin registro.",
+    "content": "Ahora la aplicación puede usar Codeium o un servidor LocalAI local (configurable mediante variables de entorno). También mejoramos la lógica para evitar llamadas accidentales a servicios pagos y añadimos parámetros de tiempo de espera para mayor resiliencia.",
+    "publishedAt": "2026-08-09T10:00:00Z",
+    "author": "Equipo SayTaxi",
+    "tags": ["ml", "llm"],
+    "featured": false
+  },
+  {
+    "id": "news-3",
+    "title": "Novedades: carga de imágenes y editor de noticias",
+    "summary": "Los administradores ahora pueden subir imágenes y crear novedades desde el panel; las entradas se muestran públicamente en la sección Novedades.",
+    "content": "Añadimos un upload handler que almacena imágenes en /uploads, y un editor simple en el panel de administración para crear/editar/eliminar novedades. El flujo incluye previsualización de imagen y marcado como destacada.",
+    "publishedAt": "2026-08-08T09:00:00Z",
+    "author": "Equipo SayTaxi",
+    "tags": ["ui", "novedades"],
+    "featured": false
+  }
+]

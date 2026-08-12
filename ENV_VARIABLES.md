@@ -53,6 +53,30 @@ SMTP_USER=tu-email@gmail.com
 SMTP_PASS=tu-contraseña-app
 ```
 
+### LLM Local (Qwen + Ollama)
+```bash
+# Fuerza uso local para evitar consumo de creditos externos
+LOCAL_LLM_ONLY=true
+
+# URL de Ollama local
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+
+# Modelo principal (si falla, el backend intenta fallbacks Qwen)
+OLLAMA_MODEL=qwen2.5-coder:1.5b-base
+
+# Intentar iniciar `ollama serve` automaticamente si no responde
+OLLAMA_AUTOSTART=true
+
+# Evita congelamiento en llamadas largas al modelo
+LLM_REQUEST_TIMEOUT_MS=45000
+
+# Tiempo maximo de espera al arrancar Ollama
+OLLAMA_BOOT_TIMEOUT_MS=20000
+
+# Cada cuanto revisar que Ollama siga vivo (ms)
+OLLAMA_KEEPALIVE_MS=480000
+```
+
 ## Cómo Configurar
 
 1. Copia `.env.example` a `.env`

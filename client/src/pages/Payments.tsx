@@ -109,7 +109,7 @@ export default function Payments() {
         <div className="text-center mb-12">
           <a href="/" className="inline-flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg">
-              <img src="/manus-storage/logo-icon_34950e08.png" alt="Logo" className="w-full h-full object-cover" style={{ background: "oklch(0.76 0.18 148)" }} />
+              <img src="/assets-storage/logo-icon_34950e08.png" alt="Logo" className="w-full h-full object-cover" style={{ background: "oklch(0.76 0.18 148)" }} />
             </div>
             <span className="text-white font-bold text-xl" style={{ fontFamily: "'Sora', sans-serif" }}>
               WhatsApp<span className="text-[oklch(0.76_0.18_148)]">Taxi</span>

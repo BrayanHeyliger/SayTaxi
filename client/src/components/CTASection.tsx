@@ -31,7 +31,7 @@ export default function CTASection() {
             {t.cta.title}
           </h2>
           <p className="text-white/60 text-lg max-w-xl mx-auto">
-            Elige cómo quieres usar WhatsApp Taxi. Regístrate gratis en menos de 2 minutos.
+            Elige cómo quieres usar Passenger. Regístrate gratis en menos de 2 minutos.
           </p>
         </div>
 

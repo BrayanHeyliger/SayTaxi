@@ -3,18 +3,19 @@
 
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/mascot-icon.svg" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>WhatsApp Taxi SaaS — Gestiona tu flota desde WhatsApp</title>
+    <title>Passenger — Tu viaje, tu elección</title>
     <meta name="description" content="Plataforma SaaS para empresas de taxi. Recibe pedidos por WhatsApp, gestiona conductores y tarifas. Sin apps adicionales." />
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
     <!-- iOS PWA support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="WATaxi" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-title" content="Passenger" />
+    <link rel="apple-touch-icon" href="/mascot-icon.svg" />
     <!-- Theme color -->
     <meta name="theme-color" content="#25D366" />
     <meta name="msapplication-TileColor" content="#25D366" />
@@ -22,14 +23,14 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Fuentes auto-hospedadas: Sora + Inter (sin dependencia de Google Fonts) -->
     <style>
-      @font-face { font-family: 'Sora'; font-weight: 400; font-display: swap; src: url('/manus-storage/sora-400_ce2439f2.ttf') format('truetype'); }
-      @font-face { font-family: 'Sora'; font-weight: 600; font-display: swap; src: url('/manus-storage/sora-600_eafb1d9c.ttf') format('truetype'); }
-      @font-face { font-family: 'Sora'; font-weight: 700; font-display: swap; src: url('/manus-storage/sora-700_44bd5cd4.ttf') format('truetype'); }
-      @font-face { font-family: 'Sora'; font-weight: 800; font-display: swap; src: url('/manus-storage/sora-800_c87f75b7.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 400; font-display: swap; src: url('/manus-storage/inter-400_105f8b52.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 500; font-display: swap; src: url('/manus-storage/inter-500_f0aa8fe1.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 600; font-display: swap; src: url('/manus-storage/inter-600_948ea806.ttf') format('truetype'); }
-      @font-face { font-family: 'Inter'; font-weight: 700; font-display: swap; src: url('/manus-storage/inter-700_b9dc43c4.ttf') format('truetype'); }
+      @font-face { font-family: 'Sora'; font-weight: 400; font-display: swap; src: url('/assets-storage/sora-400_ce2439f2.ttf') format('truetype'); }
+      @font-face { font-family: 'Sora'; font-weight: 600; font-display: swap; src: url('/assets-storage/sora-600_eafb1d9c.ttf') format('truetype'); }
+      @font-face { font-family: 'Sora'; font-weight: 700; font-display: swap; src: url('/assets-storage/sora-700_44bd5cd4.ttf') format('truetype'); }
+      @font-face { font-family: 'Sora'; font-weight: 800; font-display: swap; src: url('/assets-storage/sora-800_c87f75b7.ttf') format('truetype'); }
+      @font-face { font-family: 'Inter'; font-weight: 400; font-display: swap; src: url('/assets-storage/inter-400_105f8b52.ttf') format('truetype'); }
+      @font-face { font-family: 'Inter'; font-weight: 500; font-display: swap; src: url('/assets-storage/inter-500_f0aa8fe1.ttf') format('truetype'); }
+      @font-face { font-family: 'Inter'; font-weight: 600; font-display: swap; src: url('/assets-storage/inter-600_948ea806.ttf') format('truetype'); }
+      @font-face { font-family: 'Inter'; font-weight: 700; font-display: swap; src: url('/assets-storage/inter-700_b9dc43c4.ttf') format('truetype'); }
     </style>
   </head>
 
@@ -46,10 +47,6 @@
         });
       }
     </script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
 
 </html>

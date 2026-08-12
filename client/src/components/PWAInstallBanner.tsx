@@ -17,7 +17,10 @@ export default function PWAInstallBanner() {
   const [showBanner, setShowBanner] = useState(false);
   const [showFloating, setShowFloating] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [showIOSModal, setShowIOSModal] = useState(false);
+  const [isSafari, setIsSafari] = useState(false);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState<"ios-install" | "open-browser" | null>(null);
+  const [browserHint, setBrowserHint] = useState("tu navegador");
   const [installed, setInstalled] = useState(false);
   const [installing, setInstalling] = useState(false);
 
@@ -29,8 +32,19 @@ export default function PWAInstallBanner() {
     }
 
     const dismissed = localStorage.getItem("pwa_banner_dismissed");
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream;
+    const ua = navigator.userAgent || "";
+    const lowerUA = ua.toLowerCase();
+    const ios = /iphone|ipad|ipod/i.test(ua) && !(window as any).MSStream;
+    const safari = /safari/i.test(ua) && !/crios|fxios|edgios|opr|opios|mercury|gsa|fban|fbav/i.test(ua);
+    const inApp = /whatsapp|instagram|fban|fbav|line|micromessenger|twitter|wv\)|; wv\b/i.test(lowerUA);
+
+    if (/whatsapp/i.test(lowerUA)) setBrowserHint("WhatsApp");
+    else if (/instagram/i.test(lowerUA)) setBrowserHint("Instagram");
+    else if (/fban|fbav/i.test(lowerUA)) setBrowserHint("Facebook");
+
     setIsIOS(ios);
+    setIsSafari(safari);
+    setIsInAppBrowser(inApp);
 
     if (ios) {
       // Show banner after 4s on iOS
@@ -62,10 +76,21 @@ export default function PWAInstallBanner() {
 
   const handleInstall = async () => {
     if (isIOS) {
-      setShowIOSModal(true);
+      if (!isSafari || isInAppBrowser) {
+        setShowHelpModal("open-browser");
+      } else {
+        setShowHelpModal("ios-install");
+      }
       return;
     }
+
+    if (isInAppBrowser && !deferredPrompt) {
+      setShowHelpModal("open-browser");
+      return;
+    }
+
     if (!deferredPrompt) return;
+
     setInstalling(true);
     try {
       await deferredPrompt.prompt();
@@ -112,10 +137,16 @@ export default function PWAInstallBanner() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white font-bold text-sm" style={{ fontFamily: "'Sora', sans-serif" }}>
-                Instala WhatsApp Taxi
+                Instala Passenger
               </p>
               <p className="text-white/60 text-xs mt-0.5">
-                {isIOS ? "Disponible para iPhone y iPad" : "Acceso rápido desde tu pantalla de inicio"}
+                {isIOS
+                  ? isSafari && !isInAppBrowser
+                    ? "Disponible para iPhone y iPad"
+                    : "Abre el enlace en Safari para instalar"
+                  : isInAppBrowser
+                    ? "Abre en Chrome/Edge para instalar en un toque"
+                    : "Acceso rápido desde tu pantalla de inicio"}
               </p>
               <div className="flex items-center gap-3 mt-1">
                 <span className="text-[10px] text-white/40 flex items-center gap-1"><Smartphone size={10} /> Sin descargas</span>
@@ -129,8 +160,8 @@ export default function PWAInstallBanner() {
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-70"
                 style={{ background: "linear-gradient(135deg, oklch(0.52 0.12 148), oklch(0.76 0.18 148))", boxShadow: "0 4px 16px oklch(0.52 0.12 148 / 0.4)" }}
               >
-                {isIOS ? <Share size={14} /> : <Download size={14} />}
-                {installing ? "..." : isIOS ? "Ver cómo" : "Instalar"}
+                {isIOS || isInAppBrowser ? <Share size={14} /> : <Download size={14} />}
+                {installing ? "..." : isIOS ? "Ver cómo" : isInAppBrowser && !deferredPrompt ? "Abrir navegador" : "Instalar"}
               </button>
               <button
                 onClick={handleDismissBanner}
@@ -148,7 +179,7 @@ export default function PWAInstallBanner() {
       {showFloating && !showBanner && (
         <button
           onClick={handleInstall}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-white text-sm shadow-2xl transition-all active:scale-95 hover:scale-105"
+          className="fixed bottom-24 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-white text-sm shadow-2xl transition-all active:scale-95 hover:scale-105"
           style={{
             background: "linear-gradient(135deg, oklch(0.52 0.12 148), oklch(0.76 0.18 148))",
             boxShadow: "0 8px 32px oklch(0.52 0.12 148 / 0.5)",
@@ -162,36 +193,55 @@ export default function PWAInstallBanner() {
         </button>
       )}
 
-      {/* iOS instructions modal */}
-      {showIOSModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4" style={{ background: "oklch(0 0 0 / 0.75)" }} onClick={() => setShowIOSModal(false)}>
+      {/* Help modal: iOS install steps or open external browser steps */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4" style={{ background: "oklch(0 0 0 / 0.75)" }} onClick={() => setShowHelpModal(null)}>
           <div
             className="w-full max-w-sm rounded-3xl p-6"
             style={{ background: "oklch(0.16 0.02 200)", border: "1px solid oklch(0.76 0.18 148 / 0.3)", animation: "slideUp 0.35s cubic-bezier(0.23,1,0.32,1)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white font-bold text-lg" style={{ fontFamily: "'Sora', sans-serif" }}>
-                📱 Instalar en iPhone / iPad
-              </h3>
-              <button onClick={() => setShowIOSModal(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
+              {showHelpModal === "ios-install" ? (
+                <h3 className="text-white font-bold text-lg" style={{ fontFamily: "'Sora', sans-serif" }}>
+                  📱 Instalar en iPhone / iPad
+                </h3>
+              ) : (
+                <h3 className="text-white font-bold text-lg" style={{ fontFamily: "'Sora', sans-serif" }}>
+                  🌐 Abrir en navegador compatible
+                </h3>
+              )}
+              <button onClick={() => setShowHelpModal(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
             </div>
             <div className="flex flex-col gap-4 mb-6">
-              {[
-                { n: "1", icon: "⬆️", text: "Toca el botón Compartir en Safari (cuadrado con flecha hacia arriba)" },
-                { n: "2", icon: "📌", text: "Desplázate y toca \"Agregar a pantalla de inicio\"" },
-                { n: "3", icon: "✅", text: "Toca \"Agregar\" — la app aparecerá en tu pantalla de inicio" },
-              ].map((s) => (
-                <div key={s.n} className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0" style={{ background: "oklch(0.76 0.18 148 / 0.2)", color: "oklch(0.76 0.18 148)" }}>
-                    {s.n}
-                  </div>
-                  <p className="text-white/80 text-sm leading-relaxed"><span className="text-lg mr-1">{s.icon}</span>{s.text}</p>
-                </div>
-              ))}
+              {showHelpModal === "ios-install"
+                ? [
+                    { n: "1", icon: "⬆️", text: "Toca el botón Compartir en Safari (cuadrado con flecha hacia arriba)" },
+                    { n: "2", icon: "📌", text: "Desplázate y toca \"Agregar a pantalla de inicio\"" },
+                    { n: "3", icon: "✅", text: "Toca \"Agregar\" — la app aparecerá en tu pantalla de inicio" },
+                  ].map((s) => (
+                    <div key={s.n} className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0" style={{ background: "oklch(0.76 0.18 148 / 0.2)", color: "oklch(0.76 0.18 148)" }}>
+                        {s.n}
+                      </div>
+                      <p className="text-white/80 text-sm leading-relaxed"><span className="text-lg mr-1">{s.icon}</span>{s.text}</p>
+                    </div>
+                  ))
+                : [
+                    { n: "1", icon: "⋯", text: `Dentro de ${browserHint}, abre el menú del navegador.` },
+                    { n: "2", icon: "🌐", text: "Toca \"Abrir en Safari\" (iPhone) o \"Abrir en Chrome\" (Android)." },
+                    { n: "3", icon: "📲", text: "Ya en el navegador, vuelve a tocar \"Instalar\" para completar en un toque." },
+                  ].map((s) => (
+                    <div key={s.n} className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0" style={{ background: "oklch(0.76 0.18 148 / 0.2)", color: "oklch(0.76 0.18 148)" }}>
+                        {s.n}
+                      </div>
+                      <p className="text-white/80 text-sm leading-relaxed"><span className="text-lg mr-1">{s.icon}</span>{s.text}</p>
+                    </div>
+                  ))}
             </div>
             <button
-              onClick={() => { setShowIOSModal(false); handleDismissBanner(); }}
+              onClick={() => { setShowHelpModal(null); handleDismissBanner(); }}
               className="w-full py-3 rounded-2xl text-white font-bold text-sm"
               style={{ background: "linear-gradient(135deg, oklch(0.52 0.12 148), oklch(0.76 0.18 148))" }}
             >

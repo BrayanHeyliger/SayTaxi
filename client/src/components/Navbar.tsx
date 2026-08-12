@@ -1,5 +1,5 @@
 /**
- * Navbar — WhatsApp Taxi SaaS
+ * Navbar — Passenger
  * Design: Verde Operacional — Sora display, Inter body
  * Transparent on top, transitions to dark on scroll
  * Fully functional: auth, navigation, role-based redirects
@@ -11,6 +11,7 @@ import { Link } from "wouter";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSiteConfig } from "@/contexts/SiteConfigContext";
+import PassengerMascot from "@/components/PassengerMascot";
 
 // navLinks are now built inside the component using t translations
 
@@ -27,11 +28,12 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { lang, t } = useI18n();
   const navLinksTranslated = [
-    { label: lang === "en" ? "For Clients" : lang === "fr" ? "Pour Clients" : "Para Clientes", href: "#clientes" },
-    { label: lang === "en" ? "For Drivers" : lang === "fr" ? "Pour Chauffeurs" : "Para Conductores", href: "#conductores" },
-    { label: lang === "en" ? "For Fleets" : lang === "fr" ? "Pour Flottes" : "Para Flotillas", href: "#flotilla" },
+    { label: lang === "en" ? "Passengers" : lang === "fr" ? "Passagers" : "Pasajeros", href: "#clientes" },
+    { label: lang === "en" ? "Drivers" : lang === "fr" ? "Chauffeurs" : "Conductores", href: "#conductores" },
+    { label: lang === "en" ? "Fleets" : lang === "fr" ? "Flottes" : "Flotillas", href: "#flotilla" },
     { label: t.nav.pricing, href: "#pricing" },
     { label: t.nav.contact, href: "#contact" },
+    { label: "Novedades", href: "/novedades" },
     { label: "FAQ", href: "/faq" },
   ];
   const { config } = useSiteConfig();
@@ -54,36 +56,32 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-4 left-4 right-4 z-50 transition-all duration-300 rounded-2xl ${
         scrolled
-          ? "bg-[oklch(0.13_0.01_250/0.97)] backdrop-blur-xl shadow-lg shadow-black/20 border-b border-white/10"
+          ? "bg-[oklch(0.12_0.01_250/0.92)] shadow-2xl border border-white/12"
           : "bg-transparent"
       }`}
+      style={{ backdropFilter: scrolled ? "blur(12px)" : undefined }}
     >
       <div className="container">
-        <div className="flex items-center justify-between h-16 lg:h-20">
+        <div className="flex items-center justify-between h-16 lg:h-20 py-2">
           {/* Logo */}
           <a
             href="/"
             className="flex items-center gap-3 group"
           >
-            <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 shadow-lg shadow-green-500/20">
-              <img
-                src={config.logoUrl || "/manus-storage/logo-icon_34950e08.png"}
-                alt="WhatsApp Taxi Logo"
-                className="w-full h-full object-cover"
-                style={{ background: config.primaryColor }}
-              />
+            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 shadow-lg shadow-green-500/20 border border-white/15 bg-white/10">
+              <PassengerMascot mood="happy" size="sm" className="scale-[0.62] origin-center -translate-y-1" />
             </div>
             <div className="flex flex-col leading-none">
               <span
                 className="text-white font-bold text-base tracking-tight"
-                style={{ fontFamily: `'${config.fontFamily}', sans-serif` }}
+                style={{ fontFamily: `'Sora', sans-serif` }}
               >
                 {config.siteTitle.split(" ")[0]}<span style={{ color: config.primaryColor }}>{config.siteTitle.split(" ").slice(1).join(" ")}</span>
               </span>
-              <span className="text-white/50 text-[10px] font-medium tracking-widest uppercase">
-                SaaS Platform
+              <span className="text-white/60 text-[11px] font-medium tracking-widest uppercase">
+                Plataforma
               </span>
             </div>
           </a>
@@ -108,7 +106,7 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 text-white/90 hover:text-white bg-white/10 hover:bg-white/15 px-3 py-2 rounded-lg transition-all"
+                  className="flex items-center gap-2 text-white/90 hover:text-white bg-white/6 hover:bg-white/12 px-3 py-2 rounded-xl transition-all"
                 >
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white text-xs font-bold">
                     {user.name?.[0] || "U"}
@@ -119,7 +117,7 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
 
                 {/* Dropdown Menu */}
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-[oklch(0.18_0.01_250)] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50">
+                  <div className="absolute right-0 top-full mt-2 w-60 rounded-2xl shadow-2xl overflow-hidden z-50 border border-white/10 bg-[oklch(0.16_0.01_250/0.98)] backdrop-blur-xl">
                     <div className="px-4 py-3 border-b border-white/10">
                       <p className="text-white text-sm font-medium">{user.name}</p>
                       <p className="text-white/50 text-xs">{user.email}</p>
@@ -133,7 +131,7 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
                           onClick={() => setUserMenuOpen(false)}
                         >
                           <User size={16} />
-                          Panel de Cliente
+                          Pasajeros
                         </Link>
                       )}
                       {(user.role === "driver") && (
@@ -143,7 +141,7 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
                           onClick={() => setUserMenuOpen(false)}
                         >
                           <Car size={16} />
-                          Panel de Conductor
+                          Conductores
                         </Link>
                       )}
                       {(user.role === "admin") && (
@@ -154,7 +152,7 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
                             onClick={() => setUserMenuOpen(false)}
                           >
                             <User size={16} />
-                            Panel de Cliente
+                            Pasajeros
                           </Link>
                           <Link
                             href="/driver-dashboard"
@@ -162,7 +160,31 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
                             onClick={() => setUserMenuOpen(false)}
                           >
                             <Car size={16} />
-                            Panel de Conductor
+                            Conductores
+                          </Link>
+                          <Link
+                            href="/fleet-dashboard"
+                            className="flex items-center gap-3 px-4 py-2.5 text-white/80 hover:text-white hover:bg-white/10 transition-colors text-sm"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <Car size={16} />
+                            Flotillas
+                          </Link>
+                          <Link
+                            href="/dispatcher"
+                            className="flex items-center gap-3 px-4 py-2.5 text-white/80 hover:text-white hover:bg-white/10 transition-colors text-sm"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <Car size={16} />
+                            Dispatchers
+                          </Link>
+                          <Link
+                            href="/admin"
+                            className="flex items-center gap-3 px-4 py-2.5 text-emerald-300 hover:text-emerald-200 hover:bg-white/10 transition-colors text-sm font-semibold"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <User size={16} />
+                            Panel Super Admin
                           </Link>
                         </>
                       )}
@@ -205,7 +227,7 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
 
           {/* Mobile Menu Toggle */}
           <button
-            className="lg:hidden text-white p-2 rounded-lg hover:bg-white/10 transition-colors"
+            className="lg:hidden text-white p-2 rounded-lg hover:bg-white/12 transition-colors"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle menu"
           >
@@ -239,7 +261,7 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
                       className="text-white/80 hover:text-white text-left py-3 px-4 rounded-lg hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
                       onClick={() => setMobileOpen(false)}
                     >
-                      <User size={16} /> Panel de Cliente
+                      <User size={16} /> Pasajeros
                     </Link>
                   )}
                   {(user.role === "driver" || user.role === "admin") && (
@@ -248,8 +270,33 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
                       className="text-white/80 hover:text-white text-left py-3 px-4 rounded-lg hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
                       onClick={() => setMobileOpen(false)}
                     >
-                      <Car size={16} /> Panel de Conductor
+                      <Car size={16} /> Conductores
                     </Link>
+                  )}
+                  {(user.role === "admin") && (
+                    <>
+                      <Link
+                        href="/fleet-dashboard"
+                        className="text-white/80 hover:text-white text-left py-3 px-4 rounded-lg hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        <Car size={16} /> Flotillas
+                      </Link>
+                      <Link
+                        href="/dispatcher"
+                        className="text-white/80 hover:text-white text-left py-3 px-4 rounded-lg hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        <Car size={16} /> Dispatchers
+                      </Link>
+                      <Link
+                        href="/admin"
+                        className="text-emerald-300 hover:text-emerald-200 text-left py-3 px-4 rounded-lg hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        <User size={16} /> Panel Super Admin
+                      </Link>
+                    </>
                   )}
                   <Button
                     variant="ghost"

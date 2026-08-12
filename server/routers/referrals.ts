@@ -3,7 +3,7 @@
  * and dispatcher management
  */
 import { z } from "zod";
-import { router, publicProcedure } from "../_core/trpc";
+import { router, publicProcedure, adminProcedure } from "../_core/trpc";
 import { rawQuery, rawMutate } from "../db";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -97,11 +97,11 @@ export const referralsRouter = router({
 
   // ── ADMIN: Rewards management ───────────────────────────────────────────────
 
-  getAllRewardsAdmin: publicProcedure.query(async () => {
+  getAllRewardsAdmin: adminProcedure.query(async () => {
     return await rawQuery<any>(`SELECT * FROM referralRewards ORDER BY userRole, sortOrder ASC`);
   }),
 
-  saveReward: publicProcedure
+  saveReward: adminProcedure
     .input(z.object({
       id: z.number().optional(),
       userRole: z.enum(["client", "driver"]),
@@ -124,7 +124,7 @@ export const referralsRouter = router({
       return { success: true };
     }),
 
-  deleteReward: publicProcedure
+  deleteReward: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await rawMutate(`DELETE FROM referralRewards WHERE id = ?`, [input.id]);
@@ -133,12 +133,12 @@ export const referralsRouter = router({
 
   // ── ADMIN: Dispatcher management ────────────────────────────────────────────
 
-  getDispatchers: publicProcedure.query(async () => {
+  getDispatchers: adminProcedure.query(async () => {
     const rows = await rawQuery<any>(`SELECT * FROM dispatchers ORDER BY createdAt DESC`);
     return rows.map((r: any) => ({ ...r, permissions: r.permissions ? JSON.parse(r.permissions) : {} }));
   }),
 
-  saveDispatcher: publicProcedure
+  saveDispatcher: adminProcedure
     .input(z.object({
       id: z.number().optional(),
       userId: z.number().optional(),
@@ -172,7 +172,7 @@ export const referralsRouter = router({
       return { success: true };
     }),
 
-  deleteDispatcher: publicProcedure
+  deleteDispatcher: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await rawMutate(`DELETE FROM dispatchers WHERE id = ?`, [input.id]);
@@ -213,12 +213,12 @@ export const referralsRouter = router({
     }),
 
   // Admin: get all referral history
-  getAllReferralHistory: publicProcedure.query(async () => {
+  getAllReferralHistory: adminProcedure.query(async () => {
     return await rawQuery<any>(`SELECT rh.*, rc.code FROM referralHistory rh LEFT JOIN referralCodes rc ON rh.referralCode = rc.code ORDER BY rh.createdAt DESC LIMIT 100`);
   }),
 
   /** Admin: get referral program statistics */
-  getReferralStats: publicProcedure.query(async () => {
+  getReferralStats: adminProcedure.query(async () => {
     // Total referrals
     const totalsRows = await rawQuery<any>(`SELECT COUNT(*) as total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed FROM referralHistory`);
     // Total credits distributed

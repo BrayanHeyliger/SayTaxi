@@ -212,16 +212,46 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const resolveApiUrl = () => {
+  // If explicitly using Codeium, prefer it
+  if (ENV.useCodeium && ENV.codeiumApiUrl && ENV.codeiumApiUrl.trim().length > 0) {
+    return `${ENV.codeiumApiUrl.replace(/\/$/, "")}/v1/chat`;
+  }
+
+  // If LocalAI is configured, prefer it (local self-hosted server)
+  if (ENV.useLocalAI && ENV.localaiUrl && ENV.localaiUrl.trim().length > 0) {
+    return `${ENV.localaiUrl.replace(/\/$/, "")}/v1/chat`;
+  }
+
+  // Local Ollama only
+  if (ENV.localLlmOnly && !ENV.useCodeium) {
+    return `${ENV.ollamaBaseUrl.replace(/\/$/, "")}/api/chat`;
+  }
+
+  // Forge (or other configured external provider)
+  if (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0) {
+    return `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
+  }
+
+  // If Codeium configured (but not explicitly requested), use it as external default
+  if (ENV.codeiumApiUrl && ENV.codeiumApiUrl.trim().length > 0) {
+    return `${ENV.codeiumApiUrl.replace(/\/$/, "")}/v1/chat`;
+  }
+
+  // Fallback to Ollama
+  return `${ENV.ollamaBaseUrl.replace(/\/$/, "")}/api/chat`;
+};
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (ENV.forgeApiKey) {
+    return;
+  }
+
+  if (!ENV.forgeApiUrl || ENV.forgeApiUrl.trim().length === 0) {
+    return;
   }
 };
+
 
 const normalizeResponseFormat = ({
   responseFormat,
@@ -277,6 +307,20 @@ type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
 const sleep = (ms: number) =>
   new Promise<void>(resolve => setTimeout(resolve, ms));
 
+const isOllamaReachable = async (): Promise<boolean> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1_500);
+  try {
+    const healthUrl = `${ENV.ollamaBaseUrl.replace(/\/$/, "")}/api/tags`;
+    const response = await fetch(healthUrl, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const parseRetryAfter = (value: string | null): number | undefined => {
   if (!value) return undefined;
   const seconds = Number(value);
@@ -306,8 +350,19 @@ const fetchWithBackoff = async (
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort(
+        new Error(`LLM request timeout after ${ENV.llmRequestTimeoutMs}ms`)
+      );
+    }, ENV.llmRequestTimeoutMs);
+
     try {
-      const response = await fetch(url, init);
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
       if (response.ok || attempt === RETRY_MAX_RETRIES) {
         return response;
       }
@@ -325,6 +380,7 @@ const fetchWithBackoff = async (
       );
       await sleep(computeBackoffDelay(attempt, retryAfterMs));
     } catch (error) {
+      clearTimeout(timeout);
       lastError = error;
       if (attempt === RETRY_MAX_RETRIES) throw error;
       console.warn(
@@ -340,8 +396,6 @@ const fetchWithBackoff = async (
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
-
   const {
     messages,
     tools,
@@ -358,12 +412,55 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     max_tokens,
   } = params;
 
+  const useOllama = !ENV.useCodeium &&
+    (ENV.localLlmOnly ||
+      (!ENV.forgeApiKey &&
+        (!ENV.forgeApiUrl || ENV.forgeApiUrl.trim().length === 0) &&
+        (!ENV.codeiumApiUrl || ENV.codeiumApiUrl.trim().length === 0)));
+
+  // Determine chosen provider for logging and validation
+  const provider = ENV.useCodeium
+    ? "codeium"
+    : useOllama
+    ? "ollama"
+    : "forge";
+
+  // If forcing Codeium, ensure configuration exists
+  if (provider === "codeium") {
+    if (!ENV.codeiumApiUrl || ENV.codeiumApiUrl.trim().length === 0) {
+      throw new Error(
+        "LLM invoke failed: USE_CODEIUM is enabled but CODEIUM_API_URL is not set. Please set CODEIUM_API_URL (and CODEIUM_API_KEY if required)."
+      );
+    }
+  }
+
+  if (provider === "ollama" && !(await isOllamaReachable())) {
+    throw new Error(
+      "LLM invoke failed: Ollama is not reachable. Start `ollama serve` and pull a model (for example `ollama pull qwen3:1.7b`), or configure an external LLM provider such as Codeium or Forge via environment variables."
+    );
+  }
+
+  console.log(`[LLM] Provider selected: ${provider}; api=${resolveApiUrl()}`);
+
   const payload: Record<string, unknown> = {
     messages: messages.map(normalizeMessage),
   };
 
+  if (useOllama) {
+    payload.stream = false;
+  }
+
+  const preferredOllamaModels = [
+    ENV.ollamaModel,
+    "qwen2.5-coder:1.5b-base",
+    "qwen3:1.7b",
+    "qwen2.5:3b-instruct",
+  ].filter((value, index, list) => value && list.indexOf(value) === index);
+
   if (model) {
     payload.model = model;
+  } else if (useOllama) {
+    payload.model = preferredOllamaModels[0];
   }
 
   if (tools && tools.length > 0) {
@@ -401,23 +498,93 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  // Authorization: prefer Forge key, then Codeium key if present
+  if (ENV.forgeApiKey) {
+    headers.authorization = `Bearer ${ENV.forgeApiKey}`;
+  } else if (ENV.codeiumApiKey) {
+    headers.authorization = `Bearer ${ENV.codeiumApiKey}`;
+  }
+
+  const requestApi = resolveApiUrl();
+  let response: Response | null = null;
+  let responseErrorText = "";
+
+  if (useOllama) {
+    for (const candidateModel of preferredOllamaModels) {
+      payload.model = candidateModel;
+      const candidateResponse = await fetchWithBackoff(requestApi, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (candidateResponse.ok) {
+        response = candidateResponse;
+        break;
+      }
+
+      responseErrorText = await candidateResponse.text();
+      const modelMissing =
+        candidateResponse.status === 404 ||
+        /model\s+['\"]?.+['\"]?\s+not\s+found/i.test(responseErrorText);
+
+      if (!modelMissing) {
+        response = candidateResponse;
+        break;
+      }
+
+      console.warn(
+        `[LLM] Ollama model '${candidateModel}' unavailable. Trying next fallback.`
+      );
+    }
+  } else {
+    response = await fetchWithBackoff(requestApi, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+  }
+
+  if (!response) {
+    throw new Error("LLM invoke failed: no available Ollama model candidates");
+  }
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = responseErrorText || (await response.text());
     throw new Error(
       `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const body = await response.json();
+
+  if (useOllama) {
+    return {
+      id: `ollama-${Date.now()}`,
+      created: Date.now(),
+      model: payload.model as string,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: body.message?.content ?? "",
+          },
+          finish_reason: body.done ? "stop" : null,
+        },
+      ],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      },
+    } as InvokeResult;
+  }
+
+  return body as InvokeResult;
 }
 
 export type ModelInfo = {
@@ -433,6 +600,36 @@ export type ModelsResponse = {
 };
 
 export async function listLLMModels(): Promise<ModelsResponse> {
+  if (ENV.localLlmOnly) {
+    const tagsUrl = `${ENV.ollamaBaseUrl.replace(/\/$/, "")}/api/tags`;
+    const response = await fetchWithBackoff(tagsUrl, {
+      headers: { "content-type": "application/json" },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `List Ollama models failed: ${response.status} ${response.statusText} - ${errorText}`
+      );
+    }
+
+    const body = (await response.json()) as {
+      models?: Array<{ name?: string; modified_at?: string }>;
+    };
+
+    return {
+      object: "list",
+      data: (body.models ?? []).map(model => ({
+        id: model.name ?? "unknown",
+        object: "model",
+        created: model.modified_at
+          ? Math.floor(new Date(model.modified_at).getTime() / 1000)
+          : Math.floor(Date.now() / 1000),
+        owned_by: "ollama",
+      })),
+    };
+  }
+
   assertApiKey();
 
   const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0

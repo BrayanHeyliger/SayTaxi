@@ -1,5 +1,5 @@
 /**
- * HowItWorksSection — WhatsApp Taxi SaaS
+ * HowItWorksSection — Passenger
  * Design: Verde Operacional — flujo visual con chat bubbles y status badges reales
  */
 import { useRef, useEffect, useState } from "react";

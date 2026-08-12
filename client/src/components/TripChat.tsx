@@ -94,6 +94,15 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
     }
   }, [forceOpen]);
 
+  useEffect(() => {
+    return () => {
+      if (typingDebounceRef.current) {
+        clearTimeout(typingDebounceRef.current);
+        typingDebounceRef.current = null;
+      }
+    };
+  }, []);
+
   const handleOpen = () => {
     onOpenChange?.(true);
     setIsOpen(true);
@@ -107,7 +116,7 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
       await startCall(userName);
       toast.info(`📞 Llamando a ${otherPartyName}...`);
     } catch {
-      toast.error("No se pudo iniciar la llamada. Verifica el micrófono.");
+      toast.error("No se pudo iniciar la llamada. Verifica permisos de micrófono y compatibilidad del navegador.");
     }
   };
 

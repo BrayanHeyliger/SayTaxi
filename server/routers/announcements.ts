@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, router, adminProcedure } from "../_core/trpc";
 import { rawQuery, rawMutate } from "../db";
 
 interface Announcement {
@@ -33,14 +33,14 @@ export const announcementsRouter = router({
     }),
 
   // Get all announcements for admin panel
-  getAll: publicProcedure.query(async () => {
+  getAll: adminProcedure.query(async () => {
     return rawQuery<Announcement>(
       `SELECT * FROM announcements ORDER BY createdAt DESC LIMIT 50`
     );
   }),
 
   // Create a new announcement
-  create: publicProcedure
+  create: adminProcedure
     .input(z.object({
       title: z.string().min(1).max(255),
       message: z.string().min(1),
@@ -59,7 +59,7 @@ export const announcementsRouter = router({
     }),
 
   // Toggle active status
-  toggleActive: publicProcedure
+  toggleActive: adminProcedure
     .input(z.object({ id: z.number(), active: z.boolean() }))
     .mutation(async ({ input }) => {
       await rawMutate(
@@ -70,7 +70,7 @@ export const announcementsRouter = router({
     }),
 
   // Delete announcement
-  delete: publicProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await rawMutate(`DELETE FROM announcements WHERE id = ?`, [input.id]);

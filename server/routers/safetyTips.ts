@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, router, adminProcedure } from "../_core/trpc";
 import { rawQuery, rawMutate } from "../db";
 
 interface SafetyTip {
@@ -26,14 +26,14 @@ export const safetyTipsRouter = router({
     }),
 
   // Get all tips for admin
-  getAll: publicProcedure.query(async () => {
+  getAll: adminProcedure.query(async () => {
     return rawQuery<SafetyTip>(
       `SELECT * FROM safetyTips ORDER BY audience, category, priority DESC`
     );
   }),
 
   // Create tip
-  create: publicProcedure
+  create: adminProcedure
     .input(z.object({
       audience: z.enum(["clients", "drivers", "fleet"]),
       category: z.string().min(1).max(100),
@@ -51,7 +51,7 @@ export const safetyTipsRouter = router({
     }),
 
   // Update tip
-  update: publicProcedure
+  update: adminProcedure
     .input(z.object({
       id: z.number(),
       category: z.string().optional(),
@@ -78,7 +78,7 @@ export const safetyTipsRouter = router({
     }),
 
   // Delete tip
-  delete: publicProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await rawMutate(`DELETE FROM safetyTips WHERE id = ?`, [input.id]);
