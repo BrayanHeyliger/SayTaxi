@@ -797,40 +797,35 @@ export default function ClientDashboard() {
                 {/* Tipo de vehículo */}
                 <div>
                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Tipo de vehículo</p>
-                 <div className="grid grid-cols-2 gap-2">
+                 <div className="flex items-center gap-3 rounded-2xl border border-green-300/45 bg-[linear-gradient(145deg,rgba(5,150,105,0.9),rgba(6,120,88,0.95))] p-4 text-white shadow-[0_14px_28px_-20px_rgba(5,150,105,0.95)]">
+                   {(() => { const v = vehicles.find(x => x.id === selectedVehicle) || vehicles[0]; return (<>
+                     <span className="text-3xl leading-none">{v.icon}</span>
+                     <div className="min-w-0 flex-1">
+                       <p className="text-base font-bold leading-tight">{v.label}</p>
+                       <p className="text-[11px] text-white/75">
+                         {(vehicleAvailability[v.id]?.count ?? 0) > 0
+                           ? `${vehicleAvailability[v.id]?.count} disp · ${vehicleAvailability[v.id]?.eta}`
+                           : "No disponible"}
+                       </p>
+                     </div>
+                     <p className="text-lg font-black">{allFares[v.id] || v.price}</p>
+                   </>); })()}
+                 </div>
+                 <div className="mt-2 grid grid-cols-4 gap-2">
                    {vehicles.map(v => (
-                      <button
-                        key={v.id}
-                        onClick={() => setSelectedVehicle(v.id)}
-                        className={`p-2.5 rounded-xl border-2 text-left transition-all relative overflow-hidden ${selectedVehicle === v.id ? "border-green-500 bg-green-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}
-                      >
-                        {/* Selected indicator */}
-                        {selectedVehicle === v.id && (
-                          <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                          </div>
-                        )}
-                        {/* Icon + label */}
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-xl">{v.icon}</span>
-                          <p className="text-xs font-bold text-slate-900">{v.label}</p>
-                        </div>
-                        {/* Price — show calculated fare or rate */}
-                        {allFares[v.id] ? (
-                          <p className={`text-base font-black ${selectedVehicle === v.id ? "text-green-700" : "text-slate-800"}`}>{allFares[v.id]}</p>
-                        ) : (
-                          <p className="text-xs text-slate-500">{v.price}</p>
-                        )}
-                        {/* ETA + availability */}
-                        <div className="flex items-center gap-1 mt-1">
-                          <div className={`w-1.5 h-1.5 rounded-full ${(vehicleAvailability[v.id]?.count ?? 0) > 0 ? "bg-green-500" : "bg-slate-300"}`} />
-                          <p className="text-xs text-slate-500">
-                            {(vehicleAvailability[v.id]?.count ?? 0) > 0
-                              ? `${vehicleAvailability[v.id]?.count} disp · ${vehicleAvailability[v.id]?.eta}`
-                              : "No disponible"}
-                          </p>
-                        </div>
-                      </button>
+                     <button
+                       key={v.id}
+                       onClick={() => setSelectedVehicle(v.id)}
+                       className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-2 transition-all ${
+                         selectedVehicle === v.id
+                           ? "border-green-400 bg-green-50 dark:border-green-500/50 dark:bg-green-500/10"
+                           : "border-slate-200 bg-white hover:border-slate-300 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20"
+                       }`}
+                     >
+                       <span className="text-lg leading-none">{v.icon}</span>
+                       <span className={`text-[10px] font-semibold ${selectedVehicle === v.id ? "text-green-700 dark:text-green-400" : "text-slate-500 dark:text-slate-400"}`}>{v.label}</span>
+                       <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">{allFares[v.id] || v.price}</span>
+                     </button>
                    ))}
                  </div>
                 </div>
