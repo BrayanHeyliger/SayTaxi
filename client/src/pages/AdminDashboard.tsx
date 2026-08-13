@@ -112,6 +112,19 @@ export default function AdminDashboard() {
   const [editorView, setEditorView] = useState<EditorView>("form");
   const [previewKey, setPreviewKey] = useState(0);
 
+  // Query for completed trips today
+  const { data: completedTripsTodayData, isLoading: loadingCompleted } = trpc.adminDashboard.completedTripsToday.useQuery();
+  const [completedTripsToday, setCompletedTripsToday] = useState(
+    completedTripsTodayData ?? []
+  );
+  const { data: activeDriversData, isLoading: loadingDrivers } = trpc.adminDashboard.activeDrivers.useQuery();
+  const { data: activeTripsData, isLoading: loadingTrips } = trpc.adminDashboard.activeTrips.useQuery();
+
+  const [activeDrivers, setActiveDrivers] = useState(activeDriversData ?? []);
+  const [activeTrips, setActiveTrips] = useState(activeTripsData ?? []);
+  const [activeDrivers, setActiveDrivers] = useState([]);
+  const [activeTrips, setActiveTrips] = useState([]);
+
   // Sync local editor state from global config on mount
   useEffect(() => {
     setSiteConfig(prev => ({ ...prev, ...globalConfig }));
@@ -280,6 +293,7 @@ export default function AdminDashboard() {
                   { label: "Conductores Activos", value: `${drivers.filter(d => d.status === "active").length}/${drivers.length}`, sub: `${drivers.filter(d => d.online).length} en línea`, icon: Car, color: "text-green-600", bg: "bg-green-50" },
                   { label: "Clientes Totales", value: clients.length, sub: `${clients.filter(c => c.status === "active").length} activos`, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
                   { label: "Viajes Este Mes", value: "1,350", sub: "+8% vs mes anterior", icon: Navigation, color: "text-purple-600", bg: "bg-purple-50" },
+                 { label: "Viajes Hoy", value: `${completedTripsToday.length}`, sub: `${completedTripsToday.filter((d: any) => d.status === "completed").length} finalizados`, icon: CheckCircle, color: "text-green-600", bg: "bg-green-50" },
                   { label: "Ingresos Mes", value: "$27,000", sub: "+12% vs mes anterior", icon: DollarSign, color: "text-yellow-600", bg: "bg-yellow-50" },
                 ].map((kpi, i) => (
                   <Card key={i} className="p-4">
@@ -343,10 +357,10 @@ export default function AdminDashboard() {
                   <Card className="p-4">
                     <h3 className="font-semibold text-slate-900 text-sm mb-3">Conductores</h3>
                     <div className="space-y-2">
-                      {drivers.map(d => (
+                      {activeDrivers.map(d => (
                         <div key={d.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50">
-                          <div className="relative"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white text-xs font-bold">{d.name[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 border border-white rounded-full" />}</div>
-                          <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-slate-900 truncate">{d.name.split(" ")[0]}</p><p className="text-xs text-slate-500 truncate">{d.vehicle.split(" ")[0]}</p></div>
+                          <div className="relative"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white text-xs font-bold">{d.firstName[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 border border-white rounded-full" />}</div>
+                          <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-slate-900 truncate">{d.firstName.split(" ")[0]}</p><p className="text-xs text-slate-500 truncate">{d.vehicle.split(" ")[0]}</p></div>
                           <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${statusColors[d.status]}`}>{d.online ? "●" : "○"}</span>
                         </div>
                       ))}
@@ -393,7 +407,7 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-100">
                       {drivers.filter(d => !search || d.name.toLowerCase().includes(search.toLowerCase())).map(d => (
                         <tr key={d.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="relative"><div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-sm">{d.name[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-white rounded-full" />}</div><div><p className="font-semibold text-slate-900">{d.name}</p><p className="text-xs text-slate-500">{d.phone}</p></div></div></td>
+                          <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="relative"><div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-sm">{d.firstName[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-white rounded-full" />}</div><div><p className="font-semibold text-slate-900">{d.name}</p><p className="text-xs text-slate-500">{d.phone}</p></div></div></td>
                           <td className="px-4 py-3"><p className="text-slate-900">{d.vehicle}</p><p className="text-xs text-slate-500 font-mono">{d.plate}</p></td>
                           <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[d.status]}`}>{statusLabels[d.status]}</span></td>
                           <td className="px-4 py-3"><div className="flex items-center gap-1"><Star size={13} className="text-yellow-500 fill-yellow-500" /><span className="font-semibold">{d.rating || "—"}</span></div></td>
@@ -491,7 +505,7 @@ export default function AdminDashboard() {
                 {drivers.filter(d => d.status !== "pending").map(d => (
                   <Card key={d.id} className="p-5">
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="relative"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold">{d.name[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-white rounded-full" />}</div>
+                      <div className="relative"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold">{d.firstName[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-white rounded-full" />}</div>
                       <div className="flex-1"><p className="font-semibold text-slate-900">{d.name}</p><p className="text-xs text-slate-500">{d.vehicle} · <span className={`font-medium ${d.status === "active" ? "text-green-600" : "text-red-600"}`}>{statusLabels[d.status]}</span></p></div>
                       <div className="flex items-center gap-1"><Star size={13} className="text-yellow-500 fill-yellow-500" /><span className="text-sm font-bold text-slate-700">{d.rating || "—"}</span></div>
                     </div>
@@ -1407,7 +1421,7 @@ function DispatcherAdminPanel() {
           {dispatchers.map((d: any) => (
             <Card key={d.id} className="p-4">
               <div className="flex items-start gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">{d.name[0]}</div>
+                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">{d.firstName[0]}</div>
                 <div className="flex-1">
                   <p className="font-semibold text-slate-900">{d.name}</p>
                   <p className="text-xs text-slate-500">{d.email}</p>

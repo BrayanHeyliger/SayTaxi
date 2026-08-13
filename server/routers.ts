@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
+import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
@@ -9,6 +10,7 @@ import { referralsRouter } from "./routers/referrals";
 import { announcementsRouter } from "./routers/announcements";
 import { safetyTipsRouter } from "./routers/safetyTips";
 import { parcelsRouter } from "./routers/parcels";
+import { rawQuery } from "./db";
 
 export const appRouter = router({
   system: systemRouter,
@@ -27,6 +29,70 @@ export const appRouter = router({
       return { success: true } as const;
     }),
   }),
+  // ── Nuevo: Datos para el panel Super Admin ─────────────────────────────────
+  adminDashboard: router({
+    activeDrivers: publicProcedure.query(async () => {
+      const sql = `
+        SELECT d.id, d.firstName, d.lastName, d.email, d.vehicle, d.licensePlate,
+               d.currentLocation, d.status, d.isOnline,
+               COALESCE(
+                 (SELECT json_arrayagg(t)
+                  FROM (
+                    SELECT id, clientId, pickupLocation, dropoffLocation, status, fare,
+                           requestedAt, acceptedAt, startedAt, completedAt
+                    FROM trips WHERE driverId = d.id AND status IN ('accepted','in_progress','completed')
+                    ORDER BY requestedAt DESC LIMIT 5
+                  ) t), JSON_ARRAY()) as recentTrips
+        FROM drivers d
+        WHERE d.status IN ('active','pending')
+        ORDER BY d.isOnline DESC, d.firstName
+      `;
+      return rawQuery(sql);
+    }),
+
+    activeTrips: publicProcedure.query(async () => {
+      const sql = `
+        SELECT t.id, t.clientId, t.driverId, t.vehicleId, t.pickupLocation, t.dropoffLocation,
+               t.status, t.fare, t.requestedAt,
+               c.firstName as clientFirstName, c.lastName as clientLastName,
+               d.firstName as driverFirstName, d.lastName as driverLastName,
+               d.vehicle, d.licensePlate
+        FROM trips t
+        LEFT JOIN clients c ON t.clientId = c.id
+        LEFT JOIN drivers d ON t.driverId = d.id
+        WHERE t.status IN ('requested','accepted','in_progress')
+        ORDER BY t.requestedAt DESC
+        LIMIT 20
+      `;
+      return rawQuery(sql);
+    }),
+
+    completedTripsToday: publicProcedure.query(async () => {
+      const sql = `
+        SELECT t.id, t.clientId, t.driverId, t.fare, t.pickupLocation, t.dropoffLocation,
+               t.status, t.completedAt, t.requestedAt,
+               c.firstName as clientFirstName, c.lastName as clientLastName,
+               d.firstName as driverFirstName, d.lastName as driverLastName
+        FROM trips t
+        LEFT JOIN clients c ON t.clientId = c.id
+        LEFT JOIN drivers d ON t.driverId = d.id
+        WHERE t.status = 'completed'
+          AND DATE(t.completedAt) = CURDATE()
+        ORDER BY t.completedAt DESC
+        LIMIT 20
+      `;
+      return rawQuery(sql);
+    }),
+
+    driverLocation: publicProcedure
+      .input(z.string())
+      .query(async (opts) => {
+        const sql = `SELECT currentLocation FROM drivers WHERE id = ?`;
+        const [rows] = await rawQuery<{currentLocation: any}>(sql, [opts.id]);
+        return rows[0]?.currentLocation || null;
+      }),
+  }),
 });
+export type AppRouter = typeof appRouter;
 
 export type AppRouter = typeof appRouter;
