@@ -2,7 +2,7 @@
  * HeroSection — 100% nativo: Leaflet + OpenStreetMap + Nominatim
  * Sin dependencia de Google Maps
  */
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Navigation, Clock, ChevronRight, Shield, Zap, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { useSiteConfig } from "@/contexts/SiteConfigContext";
@@ -10,7 +10,6 @@ import { useLocalAuth } from "@/contexts/LocalAuthContext";
 import LeafletMap, { type LeafletMapRef } from "@/components/LeafletMap";
 import NominatimAutocomplete from "@/components/NominatimAutocomplete";
 import { HeroParcelForm } from "@/components/HeroParcelForm";
-import PassengerMascot from "@/components/PassengerMascot";
 import type { ParcelFormData } from "@/components/HeroParcelForm";
 import { trpc } from "@/lib/trpc";
 
@@ -72,14 +71,6 @@ export default function HeroSection() {
   const [regLoading, setRegLoading]   = useState(false);
   const [regError, setRegError]       = useState("");
   const [serviceType, setServiceType] = useState<"trip" | "parcel">("trip");
-  const [heroMascotStep, setHeroMascotStep] = useState(0);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setHeroMascotStep((prev) => (prev + 1) % 3);
-    }, 2300);
-    return () => window.clearInterval(interval);
-  }, []);
 
   const createParcelMutation = trpc.parcels.create.useMutation({
     onError: () => {
@@ -296,29 +287,6 @@ export default function HeroSection() {
             <p className="mx-auto mb-6 max-w-xl text-lg leading-relaxed text-white/70 lg:mx-0">
               Elige quien te lleva, ve tiempos reales y reserva con confianza desde una experiencia premium y transparente.
             </p>
-            <div className="mb-6 rounded-3xl border border-white/12 bg-white/8 p-4 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <PassengerMascot
-                  mood={heroMascotStep === 0 ? "searching" : heroMascotStep === 1 ? "ready" : "happy"}
-                  size="sm"
-                  animated
-                />
-                <div className="text-left">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">Asistente Passenger</p>
-                  <p className="text-sm text-white/80">
-                    {heroMascotStep === 0 && "Buscando el mejor carro cerca de ti..."}
-                    {heroMascotStep === 1 && "Conductor ideal detectado. Preparando ruta."}
-                    {heroMascotStep === 2 && "Todo listo: vamos camino al carro."}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 h-8 overflow-hidden rounded-full border border-emerald-300/25 bg-black/25 px-3">
-                <div className="flex h-full items-center gap-2 whitespace-nowrap text-xs text-emerald-100 animate-mascot-walk">
-                  <span>🚕</span>
-                  <span>Camino al punto de recogida</span>
-                </div>
-              </div>
-            </div>
             <div className="mb-6 flex flex-col items-center gap-3 lg:items-start">
               {[{ icon: Shield, text: "Conductores verificados" }, { icon: Zap, text: "Llegada en 3-8 min" }].map(({ icon: Icon, text }) => (
                 <div key={text} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3.5 py-2 text-sm text-white/80 backdrop-blur">

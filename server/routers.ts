@@ -86,13 +86,11 @@ export const appRouter = router({
 
     driverLocation: publicProcedure
       .input(z.string())
-      .query(async (opts) => {
+      .query(async ({ input }) => {
         const sql = `SELECT currentLocation FROM drivers WHERE id = ?`;
-        const [rows] = await rawQuery<{currentLocation: any}>(sql, [opts.id]);
+        const rows = await rawQuery<{currentLocation: any}>(sql, [input]);
         return rows[0]?.currentLocation || null;
       }),
   }),
 });
-export type AppRouter = typeof appRouter;
-
 export type AppRouter = typeof appRouter;

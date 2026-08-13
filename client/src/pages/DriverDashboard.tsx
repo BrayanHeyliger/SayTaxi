@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   MapPin, Phone, Star, DollarSign, LogOut, CheckCircle, XCircle, Bell, Car,
-  Navigation, AlertTriangle, MessageCircle, Shield, TrendingUp, Clock, FileText, Gift
+  Navigation, AlertTriangle, MessageCircle, Shield, TrendingUp, Clock, FileText, Gift, Camera, Moon, Sun
 } from "lucide-react";
 import { useLocalAuth } from "@/contexts/LocalAuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import { useNotificationHistory } from "@/hooks/useNotificationHistory";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -32,7 +33,8 @@ interface PendingTrip {
 interface EarningsEntry { date: string; trips: number; earnings: number; }
 
 export default function DriverDashboard() {
-  const { user, isAuthenticated, logout } = useLocalAuth();
+  const { user, isAuthenticated, updateUser, logout } = useLocalAuth();
+  const { theme, toggleTheme } = useTheme();
   const [, navigate] = useLocation();
   const { permission: notifPermission, requestPermission, sendNotification } = usePushNotifications();
   const { notifications: persistedNotifs, unreadCount, addNotification: addPersistedNotif, markAllRead, clearAll: clearAllNotifs } = useNotificationHistory(user?.role || "driver");
@@ -40,12 +42,11 @@ export default function DriverDashboard() {
   const [isOnline, setIsOnline] = useState(false);
   const [pendingTrips, setPendingTrips] = useState<PendingTrip[]>([]);
   const [currentTrip, setCurrentTrip] = useState<PendingTrip | null>(null);
-  const [tripPhase, setTripPhase] = useState<"idle" | "accepted" | "otp_verify" | "in_progress" | "completed" | "rating">("idle");
+  const [tripPhase, setTripPhase] = useState<"idle" | "accepted" | "arrived" | "on_board" | "in_progress" | "completed" | "rating">("idle");
   const [newTripAlert, setNewTripAlert] = useState(false);
   const [earnings, setEarnings] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
-  const [otpInput, setOtpInput] = useState("");
-  const [otpCode] = useState("4821"); // Demo OTP
+  const [chatOpen, setChatOpen] = useState(false);
   const [passengerRating, setPassengerRating] = useState(0);
   const [activeTab, setActiveTab] = useState<"trips" | "earnings" | "referrals" | "profile" | "docs" | "parcels">("trips");
   const [liveTripState, setLiveTripState] = useState<any>(null);
@@ -58,6 +59,9 @@ export default function DriverDashboard() {
     { date: "Dom", trips: 6, earnings: 98.00 },
     { date: "Sáb", trips: 15, earnings: 287.50 },
   ]);
+  const [etaTickSeconds, setEtaTickSeconds] = useState(0);
+  const [statusPulseOn, setStatusPulseOn] = useState(false);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (!isAuthenticated) navigate("/login"); }, [isAuthenticated]);
 
@@ -142,6 +146,19 @@ export default function DriverDashboard() {
     return () => { cancelled = true; };
   }, [currentTrip, currentLocation, tripPhase, user?.name]);
 
+  useEffect(() => {
+    if (!currentTrip || (tripPhase !== "accepted" && tripPhase !== "in_progress")) {
+      setEtaTickSeconds(0);
+      setStatusPulseOn(false);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setEtaTickSeconds((prev) => prev + 1);
+      setStatusPulseOn((prev) => !prev);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [currentTrip, tripPhase]);
+
   const handleAcceptTrip = (trip: PendingTrip) => {
     const trips: PendingTrip[] = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
     const updated = trips.map(t => t.id === trip.id ? {
@@ -169,29 +186,30 @@ export default function DriverDashboard() {
   };
 
   const handleArrived = () => {
-    setTripPhase("otp_verify");
-    toast.info("Ingresa el código OTP del pasajero para iniciar el viaje");
+    setTripPhase("arrived");
+    toast.success("¡Llegaste al pasajero!");
   };
 
-  const handleVerifyOTP = () => {
-    if (otpInput === otpCode) {
-      setTripPhase("in_progress");
-      toast.success("¡OTP verificado! Viaje iniciado");
-      if (currentTrip) {
-        const trips: PendingTrip[] = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
-        const updated = trips.map(t => t.id === currentTrip.id ? { ...t, status: "in_progress" } : t);
-        localStorage.setItem(TRIPS_KEY, JSON.stringify(updated));
-        localStorage.setItem(LIVE_TRIP_KEY, JSON.stringify({
-          tripId: currentTrip.id,
-          phase: "in_progress",
-          pickup: { label: currentTrip.pickup },
-          dropoff: { label: currentTrip.dropoff },
-          driverName: user?.name || "Conductor",
-          updatedAt: Date.now(),
-        }));
-      }
-    } else {
-      toast.error("Código OTP incorrecto");
+  const handlePassengerOnBoard = () => {
+    setTripPhase("on_board");
+    toast.success("Pasajero a bordo. ¡Listo para iniciar!");
+  };
+
+  const handleStartTrip = () => {
+    setTripPhase("in_progress");
+    toast.success("¡Viaje iniciado!");
+    if (currentTrip) {
+      const trips: PendingTrip[] = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
+      const updated = trips.map(t => t.id === currentTrip.id ? { ...t, status: "in_progress" } : t);
+      localStorage.setItem(TRIPS_KEY, JSON.stringify(updated));
+      localStorage.setItem(LIVE_TRIP_KEY, JSON.stringify({
+        tripId: currentTrip.id,
+        phase: "in_progress",
+        pickup: { label: currentTrip.pickup },
+        dropoff: { label: currentTrip.dropoff },
+        driverName: user?.name || "Conductor",
+        updatedAt: Date.now(),
+      }));
     }
   };
 
@@ -216,7 +234,6 @@ export default function DriverDashboard() {
     setTripPhase("idle");
     setCurrentTrip(null);
     setPassengerRating(0);
-    setOtpInput("");
     localStorage.removeItem(LIVE_TRIP_KEY);
     toast.success(`¡Viaje completado! +${currentTrip.fare} ganados`);
   };
@@ -232,9 +249,8 @@ export default function DriverDashboard() {
   };
 
   const handleMessagePassenger = () => {
-    // No exponemos el número del pasajero — usar chat interno
-    toast.info("💬 Escríbele al pasajero por el chat seguro de abajo");
-    document.getElementById("driver-chat-anchor")?.scrollIntoView({ behavior: "smooth" });
+    setChatOpen(true);
+    toast.info("💬 Chat seguro abierto");
   };
 
   const handleSOS = () => {
@@ -266,6 +282,8 @@ export default function DriverDashboard() {
   const driverMascotMood =
     tripPhase === "accepted"
       ? "ready"
+      : tripPhase === "arrived" || tripPhase === "on_board"
+      ? "happy"
       : tripPhase === "in_progress"
       ? "happy"
       : pendingTrips.length > 0
@@ -278,6 +296,18 @@ export default function DriverDashboard() {
           "Excelente, ya aceptaste este viaje.",
           "Recuerda confirmar llegada con el pasajero.",
           "Mantente atento al punto de recogida.",
+        ]
+      : tripPhase === "arrived"
+      ? [
+          "Llegaste al punto de recogida.",
+          "Confirma la identidad del pasajero antes de continuar.",
+          "Todo listo para subir al pasajero.",
+        ]
+      : tripPhase === "on_board"
+      ? [
+          "Pasajero a bordo.",
+          "Asegurate de que todos esten listos antes de iniciar.",
+          "¡Arranquemos el viaje!",
         ]
       : tripPhase === "in_progress"
       ? [
@@ -303,80 +333,168 @@ export default function DriverDashboard() {
           "Cuando quieras, arrancamos.",
         ];
 
+  const phaseLabel =
+    tripPhase === "accepted"
+      ? "En ruta a recogida"
+      : tripPhase === "arrived"
+      ? "Llegaste al pasajero"
+      : tripPhase === "on_board"
+      ? "Pasajero a bordo"
+      : tripPhase === "in_progress"
+      ? "Viaje en curso"
+      : tripPhase === "rating"
+      ? "Calificacion"
+      : "Disponible";
+
+  const rawEta = Number((currentTrip?.estimatedTime || "5").match(/\d+/)?.[0] || 5);
+  const liveEtaMinutes = Math.max(1, rawEta - Math.floor(etaTickSeconds / 75));
+  const liveEtaLabel = `${liveEtaMinutes} min`;
+  const hasActiveTrip = Boolean(
+    currentTrip &&
+    (tripPhase === "accepted" || tripPhase === "arrived" || tripPhase === "on_board" || tripPhase === "in_progress")
+  );
+  const showFloatingHelpers = !chatOpen && !hasActiveTrip;
+
+  const handleProfilePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecciona una imagen válida");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("La imagen debe pesar menos de 2 MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const nextPhotoUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!nextPhotoUrl) return;
+      updateUser({ photoUrl: nextPhotoUrl });
+      toast.success("Foto de perfil actualizada");
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
   if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="wt-panel h-screen overflow-hidden flex flex-col">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">{user?.name?.[0] || "D"}</div>
-            <div>
-              <p className="font-semibold text-slate-900 text-sm">{user?.name}</p>
-              <p className="text-xs text-slate-500">Panel de Conductor</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${isOnline ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>
-              {isOnline ? "● En Línea" : "○ Desconectado"}
-            </div>
-            {newTripAlert && (
-              <div className="flex items-center gap-1 bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-semibold animate-bounce">
-                <Bell size={12} /> ¡Nuevo viaje!
+      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-emerald-500/15 dark:bg-[#0f172a]/80">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => profilePhotoInputRef.current?.click()}
+                className="relative h-10 w-10 rounded-full overflow-hidden bg-gradient-to-br from-emerald-400 to-[#0f172a] text-white flex items-center justify-center font-bold shadow-sm ring-2 ring-white/60 dark:ring-emerald-500/40"
+                title="Cambiar foto de perfil"
+              >
+                {user?.photoUrl ? (
+                  <img src={user.photoUrl} alt="Foto de perfil" className="h-full w-full object-cover" />
+                ) : (
+                  <span>{user?.name?.[0] || "D"}</span>
+                )}
+                <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white dark:border-[#0f172a] ${isOnline ? "bg-emerald-500" : "bg-slate-400"}`} />
+              </button>
+              <input
+                ref={profilePhotoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleProfilePhotoChange}
+              />
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">{user?.name}</p>
+                <p className="text-xs font-normal text-slate-500 dark:text-slate-400">Panel de Conductor</p>
               </div>
-            )}
-            {/* Campana con historial de 24h — igual que el cliente */}
-            <div className="relative">
-              <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) markAllRead(); }} className="relative p-2 rounded-lg hover:bg-slate-100">
-                <Bell size={20} className="text-slate-600" />
-                {unreadCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">{unreadCount > 9 ? "9+" : unreadCount}</span>}
-              </button>
-              {showNotifications && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50">
-                  <div className="p-3 border-b border-slate-200 flex justify-between items-center">
-                    <div>
-                      <h3 className="font-semibold text-slate-900 text-sm">Notificaciones</h3>
-                      <p className="text-xs text-slate-400">Últimas 24 horas</p>
-                    </div>
-                    <button onClick={clearAllNotifs} className="text-xs text-slate-500 hover:text-red-500 transition-colors">Limpiar</button>
-                  </div>
-                  <div className="max-h-72 overflow-y-auto">
-                    {persistedNotifs.length === 0
-                      ? <div className="p-6 text-center"><Bell size={28} className="mx-auto text-slate-200 mb-2" /><p className="text-sm text-slate-400">Sin notificaciones</p></div>
-                      : persistedNotifs.map(n => (
-                        <div key={n.id} className={`p-3 border-b border-slate-100 flex gap-3 items-start ${!n.read ? "bg-blue-50/60" : ""}`}>
-                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.type === "success" ? "bg-green-500" : n.type === "warning" ? "bg-yellow-500" : n.type === "error" ? "bg-red-500" : "bg-blue-500"}`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-slate-800 leading-snug">{n.message}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{new Date(n.timestamp).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</p>
-                          </div>
-                          {!n.read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
-                        </div>
-                      ))
-                    }
-                  </div>
-                  <div className="p-2 border-t border-slate-100 text-center">
-                    <p className="text-xs text-slate-400">Se reinicia automáticamente cada 24 h</p>
-                  </div>
-                </div>
-              )}
             </div>
-            {notifPermission !== "granted" && (
-              <button onClick={requestPermission} title="Activar notificaciones push" className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 border border-blue-200 text-xs flex items-center gap-1">
-                <Bell size={14} /> Push
-              </button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => { logout(); navigate("/"); }} className="gap-1.5 text-xs">
-              <LogOut size={13} /> Salir
-            </Button>
+
+            <div className="flex items-center gap-1.5">
+              <div className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hidden sm:block dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                {isOnline ? "En línea" : "Offline"}
+              </div>
+              {toggleTheme && (
+                <button onClick={toggleTheme} title={theme === "dark" ? "Modo claro" : "Modo oscuro"} className="relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-100/80 text-slate-700 transition hover:bg-slate-200/80 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10">
+                  {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+              )}
+              <div className="relative">
+                <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) markAllRead(); }} className="relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-100/80 text-slate-600 transition hover:bg-slate-200/80 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10">
+                  <Bell size={16} />
+                  {unreadCount > 0 && <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+                </button>
+                {showNotifications && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 dark:bg-[#0f172a] dark:border-white/10">
+                    <div className="p-3 border-b border-slate-200 flex justify-between items-center dark:border-white/10">
+                      <div>
+                        <h3 className="font-semibold text-slate-900 text-sm dark:text-slate-100">Notificaciones</h3>
+                        <p className="text-xs text-slate-400">Últimas 24 horas</p>
+                      </div>
+                      <button onClick={clearAllNotifs} className="text-xs text-slate-500 hover:text-red-500 transition-colors dark:text-slate-400">Limpiar</button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto">
+                      {persistedNotifs.length === 0
+                        ? <div className="p-6 text-center"><Bell size={28} className="mx-auto text-slate-200 mb-2 dark:text-slate-700" /><p className="text-sm text-slate-400">Sin notificaciones</p></div>
+                        : persistedNotifs.map(n => (
+                          <div key={n.id} className={`p-3 border-b border-slate-100 flex gap-3 items-start dark:border-white/5 ${!n.read ? "bg-blue-50/60 dark:bg-blue-500/10" : ""}`}>
+                            <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.type === "success" ? "bg-green-500" : n.type === "warning" ? "bg-yellow-500" : n.type === "error" ? "bg-red-500" : "bg-blue-500"}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-slate-800 leading-snug dark:text-slate-200">{n.message}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{new Date(n.timestamp).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</p>
+                            </div>
+                            {!n.read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
+                          </div>
+                        ))
+                      }
+                    </div>
+                    <div className="p-2 border-t border-slate-100 text-center dark:border-white/5">
+                      <p className="text-xs text-slate-400">Se reinicia automáticamente cada 24 h</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {notifPermission !== "granted" && (
+                <button onClick={requestPermission} title="Activar notificaciones push" className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-400">
+                  <Bell size={14} />
+                </button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { logout(); navigate("/"); }} className="gap-1.5 text-xs rounded-full dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10">
+                <LogOut size={13} />
+                <span className="hidden sm:inline">Salir</span>
+              </Button>
+            </div>
           </div>
+
+          <div className="mt-4 flex items-center">
+            <div className="flex-1 text-center">
+              <p className={`text-sm font-semibold ${isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-slate-600 dark:text-slate-400"}`}>{isOnline ? "En línea" : "Desconectado"}</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Estado</p>
+            </div>
+            <div className="flex-1 text-center border-l border-slate-200/80 dark:border-white/10">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{completedCount}</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Viajes hoy</p>
+            </div>
+            <div className="flex-1 text-center border-l border-slate-200/80 dark:border-white/10">
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">${earnings.toFixed(2)}</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Ganancias</p>
+            </div>
+          </div>
+
+          {newTripAlert && (
+            <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700 animate-pulse">
+              <Bell size={12} /> ¡Nuevo viaje disponible!
+            </div>
+          )}
         </div>
       </header>
 
       {/* Tabs */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 flex">
+      <div className="bg-white/70 border-b border-slate-200/70 backdrop-blur-xl dark:bg-[#0f172a]/70 dark:border-white/10">
+        <div className="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto scrollbar-thin">
           {[
             { id: "trips" as const, label: "Viajes", icon: Car },
             { id: "earnings" as const, label: "Ganancias", icon: DollarSign },
@@ -386,14 +504,14 @@ export default function DriverDashboard() {
             { id: "docs" as const, label: "Documentos", icon: FileText },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? "border-blue-500 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-              <tab.icon size={16} /> {tab.label}
+              className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? "border-emerald-500 text-emerald-600 dark:text-emerald-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}`}>
+              <tab.icon size={15} /> <span>{tab.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full pb-32 lg:pb-6">
+      <main className="flex-1 overflow-y-auto max-w-7xl mx-auto px-4 py-8 w-full pb-6 sm:px-6">
 
         {/* TAB: REFERIDOS */}
         {/* Broadcast Announcements */}
@@ -409,7 +527,7 @@ export default function DriverDashboard() {
                 <Gift size={20} className="text-purple-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Programa de Referidos</h2>
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Programa de Referidos</h2>
                 <p className="text-sm text-slate-500">Recluta conductores y gana bonos en efectivo</p>
               </div>
             </div>
@@ -423,252 +541,221 @@ export default function DriverDashboard() {
 
         {/* TAB: VIAJES */}
         {activeTab === "trips" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Toggle Online — moved to top near map for mobile */}
-            <div className="lg:col-span-2 order-first">
-              <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex-1">
-                    <h2 className="text-base font-bold text-slate-900">Disponibilidad</h2>
-                    <p className="text-xs text-slate-600 mt-0.5">{isOnline ? "Recibirás solicitudes de viaje" : "Activa para recibir viajes"}</p>
-                  </div>
-                  <button
-                    onClick={() => setIsOnline(!isOnline)}
-                    className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${isOnline ? "bg-green-500" : "bg-slate-300"}`}
-                  >
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isOnline ? "translate-x-6" : "translate-x-0.5"}`} />
-                  </button>
+          <div className="space-y-4">
+            <Card className="rounded-2xl border-slate-200 bg-slate-950/85! p-4 text-white shadow-sm backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-white/55">Modo conductor</p>
+                  <h2 className="mt-1 text-lg font-bold">{isOnline ? "En linea - recibiendo viajes" : "Desconectado"}</h2>
+                  <p className="text-xs text-white/65">{isOnline ? "ETA promedio 4-6 min" : "Activa tu estado para empezar a ganar"}</p>
                 </div>
-              </Card>
-            </div>
-            <div className="lg:col-span-2 space-y-4 order-2 lg:order-2">
+                <button
+                  onClick={() => setIsOnline(!isOnline)}
+                  className={`relative h-7 w-14 rounded-full transition-colors ${isOnline ? "bg-emerald-500" : "bg-slate-500"}`}
+                >
+                  <div className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform dark:bg-white ${isOnline ? "translate-x-8" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </Card>
 
-              {/* Viaje Actual */}
-              {currentTrip && tripPhase !== "idle" ? (
-                <Card className="p-5">
-                  <h2 className="text-lg font-bold text-slate-900 mb-4">
-                    {tripPhase === "accepted" ? "Viaje Aceptado — En camino" :
-                     tripPhase === "otp_verify" ? "Verificar Pasajero (OTP)" :
-                     tripPhase === "in_progress" ? "Viaje en Progreso" :
-                     tripPhase === "rating" ? "Calificar Pasajero" : "Viaje Completado"}
-                  </h2>
-
-                  {/* Datos del viaje */}
-                  {tripPhase !== "rating" && (
-                    <div className="bg-slate-50 rounded-xl p-4 mb-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <p className="font-semibold text-slate-900">{currentTrip.clientName}</p>
-                          <p className="text-xs text-slate-500">Pasajero</p>
-                        </div>
-                        <p className="font-bold text-green-600 text-xl">{currentTrip.fare}</p>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex gap-2 items-start">
-                          <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5"><MapPin size={11} className="text-green-600" /></div>
-                          <div><p className="text-xs text-slate-500">Recogida</p><p className="font-medium text-slate-900">{currentTrip.pickup}</p></div>
-                        </div>
-                        <div className="flex gap-2 items-start">
-                          <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5"><MapPin size={11} className="text-red-600" /></div>
-                          <div><p className="text-xs text-slate-500">Destino</p><p className="font-medium text-slate-900">{currentTrip.dropoff}</p></div>
-                        </div>
-                      </div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+              <div className="space-y-4 lg:col-span-2">
+                <Card className="overflow-hidden border-slate-200 p-0 relative z-0">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-900">Mapa en vivo</h3>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${isOnline ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                      {isOnline ? "● En linea" : "○ Offline"}
+                    </span>
+                  </div>
+                  <div className="relative z-0 w-full" style={{ height: "min(52vh, 420px)" }}>
+                    <LeafletMap
+                      height="100%"
+                      className="absolute inset-0 z-0 h-full w-full"
+                      onMapReady={(ref) => {
+                        mapRef.current = ref;
+                        navigator.geolocation?.getCurrentPosition(async (pos) => {
+                          const { latitude: lat, longitude: lng } = pos.coords;
+                          setCurrentLocation({ lat, lng });
+                          ref.setPickup(lat, lng, "Mi posición");
+                        });
+                      }}
+                    />
+                  </div>
+                  {currentTrip && (tripPhase === "accepted" || tripPhase === "arrived" || tripPhase === "on_board" || tripPhase === "in_progress") && (
+                    <div className="border-t border-blue-100 bg-blue-50 px-4 py-3">
+                      <p className="text-xs font-medium text-blue-700">Ruta activa: {currentTrip.pickup} → {currentTrip.dropoff}</p>
                     </div>
                   )}
+                </Card>
 
-                  {/* OTP Verificación */}
-                  {tripPhase === "otp_verify" && (
-                    <div className="space-y-4">
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-                        <p className="text-sm text-blue-800 mb-1">Pide al pasajero su código OTP</p>
-                        <p className="text-xs text-blue-600">(Demo: el código es <strong>4821</strong>)</p>
+                {currentTrip && tripPhase !== "idle" ? (
+                  <Card className="rounded-2xl p-5">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Estado</p>
+                        <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{phaseLabel}</h2>
                       </div>
-                      <div className="flex gap-2">
-                        <input type="text" placeholder="Ingresa código OTP" value={otpInput} onChange={(e) => setOtpInput(e.target.value)}
-                          maxLength={4} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-center text-2xl font-bold tracking-widest focus:ring-2 focus:ring-blue-500 outline-none" />
-                        <Button onClick={handleVerifyOTP} className="bg-blue-600 hover:bg-blue-700 text-white px-6">
-                          <CheckCircle size={18} />
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-600">ETA</p>
+                        <p className="text-sm font-bold text-emerald-700">{liveEtaLabel}</p>
+                      </div>
+                    </div>
+
+                    {tripPhase !== "rating" && (
+                      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="mb-3 flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-900">{currentTrip.clientName}</p>
+                            <p className="text-xs text-slate-500">{tripPhase === "accepted" ? "Pickup" : "Destino"}</p>
+                          </div>
+                          <p className="text-xl font-bold text-emerald-600">{currentTrip.fare}</p>
+                        </div>
+                        <div className="space-y-1.5 text-sm">
+                          <p className="truncate text-slate-700"><MapPin size={13} className="mr-1 inline text-emerald-500" />{currentTrip.pickup}</p>
+                          <p className="truncate text-slate-700"><MapPin size={13} className="mr-1 inline text-red-500" />{currentTrip.dropoff}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {tripPhase === "arrived" && (
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+                          <CheckCircle size={28} className="mx-auto mb-1 text-emerald-600" />
+                          <p className="text-sm font-semibold text-emerald-800">Llegaste al pasajero</p>
+                          <p className="text-xs text-emerald-600">Confirma su identidad antes de continuar</p>
+                        </div>
+                        <Button onClick={handlePassengerOnBoard} className="h-12 w-full rounded-xl bg-emerald-500 font-semibold text-white hover:bg-emerald-600">
+                          <CheckCircle size={16} className="mr-2" /> Pasajero a bordo
                         </Button>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Rating del pasajero */}
-                  {tripPhase === "rating" && (
-                    <div className="space-y-4">
-                      <p className="text-sm text-slate-600">¿Cómo fue el pasajero {currentTrip.clientName}?</p>
-                      <div className="flex justify-center gap-3 py-2">
-                        {[1,2,3,4,5].map(s => (
-                          <button key={s} onClick={() => setPassengerRating(s)}>
-                            <Star size={36} className={`transition-all ${s <= passengerRating ? "text-yellow-500 fill-yellow-500 scale-110" : "text-slate-300 hover:text-yellow-400"}`} />
-                          </button>
+                    {tripPhase === "on_board" && (
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center">
+                          <Car size={28} className="mx-auto mb-1 text-blue-600" />
+                          <p className="text-sm font-semibold text-blue-800">Pasajero a bordo</p>
+                          <p className="text-xs text-blue-600">Listo para comenzar el viaje</p>
+                        </div>
+                        <Button onClick={handleStartTrip} className="h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700">
+                          <Navigation size={16} className="mr-2" /> Iniciar viaje
+                        </Button>
+                      </div>
+                    )}
+
+                    {tripPhase === "rating" && (
+                      <div className="space-y-4">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Total del viaje</p>
+                          <p className="mt-1 text-3xl font-bold text-emerald-600">{currentTrip.fare}</p>
+                          <div className="mt-3 space-y-1.5 text-sm">
+                            <p className="truncate text-slate-700"><MapPin size={13} className="mr-1 inline text-emerald-500" />{currentTrip.pickup}</p>
+                            <p className="truncate text-slate-700"><MapPin size={13} className="mr-1 inline text-red-500" />{currentTrip.dropoff}</p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-600">¿Cómo fue el pasajero {currentTrip.clientName}?</p>
+                        <div className="flex justify-center gap-3 py-2">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button key={s} onClick={() => setPassengerRating(s)}>
+                              <Star size={36} className={`transition-all ${s <= passengerRating ? "scale-110 fill-yellow-500 text-yellow-500" : "text-slate-300 hover:text-yellow-400"}`} />
+                            </button>
+                          ))}
+                        </div>
+                        <Button onClick={handleSubmitRating} className="h-12 w-full rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700">
+                          <DollarSign size={16} className="mr-2" /> Finalizar y cobrar
+                        </Button>
+                      </div>
+                    )}
+
+                    {tripPhase === "accepted" && (
+                      <div className="space-y-3">
+                        <Button onClick={() => handleNavigate(currentTrip.pickup)} className="h-12 w-full rounded-xl bg-emerald-500 font-semibold text-white hover:bg-emerald-600">
+                          <Navigation size={16} className="mr-2" /> Ir a recoger
+                        </Button>
+                        <div className="grid grid-cols-3 gap-2 md:grid-cols-3">
+                          <Button variant="outline" size="sm" onClick={handleCallPassenger} className="gap-1 text-xs"><Phone size={12} /> Llamar</Button>
+                          <Button variant="outline" size="sm" onClick={handleMessagePassenger} className="gap-1 text-xs"><MessageCircle size={12} /> Chat</Button>
+                          <Button variant="outline" size="sm" onClick={handleArrived} className="gap-1 text-xs text-blue-600 border-blue-200"><CheckCircle size={12} /> Llegue</Button>
+                        </div>
+                        <Button variant="outline" onClick={handleSOS} className="w-full border-red-200 text-red-500"><AlertTriangle size={14} className="mr-2" /> SOS</Button>
+                      </div>
+                    )}
+
+                    {tripPhase === "in_progress" && (
+                      <div className="space-y-3">
+                        <Button onClick={() => handleNavigate(currentTrip.dropoff)} className="h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700">
+                          <Navigation size={16} className="mr-2" /> Navegar a destino
+                        </Button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button variant="outline" size="sm" onClick={handleMessagePassenger} className="gap-1 text-xs"><MessageCircle size={12} /> Chat</Button>
+                          <Button variant="outline" size="sm" onClick={handleSOS} className="gap-1 text-xs border-red-200 text-red-500"><AlertTriangle size={12} /> SOS</Button>
+                        </div>
+                        <Button onClick={handleCompleteTrip} className="h-12 w-full rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700">
+                          <CheckCircle size={16} className="mr-2" /> Finalizar viaje
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                ) : (
+                  <Card className="rounded-2xl p-5">
+                    <h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                      Viajes disponibles {pendingTrips.length > 0 && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-sm text-emerald-700">{pendingTrips.length}</span>}
+                    </h2>
+                    {!isOnline ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 py-8 text-center">
+                        <Car size={40} className="mx-auto mb-3 text-slate-300" />
+                        <p className="font-medium text-slate-600">Activa modo en linea para recibir viajes</p>
+                        <Button onClick={() => setIsOnline(true)} className="mt-4 bg-emerald-500 text-white hover:bg-emerald-600">Conectar ahora</Button>
+                      </div>
+                    ) : pendingTrips.length === 0 ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 py-8 text-center">
+                        <Bell size={40} className="mx-auto mb-3 text-slate-300" />
+                        <p className="font-medium text-slate-600">Esperando solicitudes</p>
+                        <p className="mt-1 text-sm text-slate-500">Te notificaremos cuando entre un viaje</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {pendingTrips.map((trip) => (
+                          <div key={trip.id} className="rounded-xl border border-slate-200 p-4 transition-shadow hover:shadow-md">
+                            <div className="mb-3 flex items-start justify-between">
+                              <div>
+                                <p className="font-semibold text-slate-900">{trip.clientName}</p>
+                                <p className="text-xs text-slate-500">{new Date(trip.requestedAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</p>
+                              </div>
+                              <p className="text-xl font-bold text-emerald-600">{trip.fare}</p>
+                            </div>
+                            <div className="mb-4 space-y-1.5 text-sm">
+                              <p className="text-slate-600"><MapPin size={13} className="mr-1 inline text-emerald-500" />{trip.pickup}</p>
+                              <p className="text-slate-600"><MapPin size={13} className="mr-1 inline text-red-500" />{trip.dropoff}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button variant="outline" size="sm" onClick={() => handleRejectTrip(trip.id)} className="border-red-200 text-red-500">Rechazar</Button>
+                              <Button size="sm" onClick={() => handleAcceptTrip(trip)} className="bg-emerald-500 text-white hover:bg-emerald-600">Aceptar</Button>
+                            </div>
+                          </div>
                         ))}
                       </div>
-                      <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-                        <p className="text-lg font-bold text-green-600">{currentTrip.fare} ganados</p>
-                        <p className="text-xs text-green-700">Viaje completado exitosamente</p>
-                      </div>
-                      <Button onClick={handleSubmitRating} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 font-bold">
-                        Finalizar y Cobrar
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Acciones según fase */}
-                  {tripPhase === "accepted" && (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button onClick={handleCallPassenger} className="bg-green-600 hover:bg-green-700 text-white gap-2">
-                          <Phone size={15} /> Llamar
-                        </Button>
-                        <Button onClick={handleMessagePassenger} className="bg-[#25D366] hover:bg-[#1ebe57] text-white gap-2">
-                          <MessageCircle size={15} /> WhatsApp
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleNavigate(currentTrip.pickup)} className="gap-1 text-xs">
-                          <Navigation size={12} /> Ir a recoger
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={handleSOS} className="gap-1 text-xs text-red-500 border-red-200">
-                          <AlertTriangle size={12} /> SOS
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={handleArrived} className="gap-1 text-xs text-blue-600 border-blue-200">
-                          <CheckCircle size={12} /> Llegué
-                        </Button>
-                      </div>
-                      <Button variant="outline" onClick={() => { setCurrentTrip(null); setTripPhase("idle"); }} className="w-full text-red-500 border-red-200">
-                        <XCircle size={16} className="mr-2" /> Cancelar Viaje
-                      </Button>
-                    </div>
-                  )}
-
-                  {tripPhase === "in_progress" && (
-                    <div className="space-y-3">
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
-                        <p className="font-semibold mb-1">📍 Destino del pasajero:</p>
-                        <p className="text-blue-800">{currentTrip.dropoff}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button onClick={() => handleNavigate(currentTrip.dropoff)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
-                          <Navigation size={15} /> 🗺️ Navegar GPS
-                        </Button>
-                        <Button onClick={handleSOS} variant="outline" className="text-red-500 border-red-200 gap-2">
-                          <AlertTriangle size={15} /> SOS
-                        </Button>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="flex-1 gap-1 text-xs text-green-600 border-green-200"
-                          onClick={handleCallPassenger}>
-                          <Phone size={12} /> Llamar cliente
-                        </Button>
-                        <Button variant="outline" size="sm" className="flex-1 gap-1 text-xs text-green-600 border-green-200"
-                          onClick={handleMessagePassenger}>
-                          <MessageCircle size={12} /> WhatsApp
-                        </Button>
-                      </div>
-                      <Button onClick={handleCompleteTrip} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 font-bold gap-2">
-                        <CheckCircle size={18} /> Finalizar Viaje
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              ) : (
-                /* Viajes disponibles */
-                <Card className="p-5">
-                  <h2 className="text-lg font-bold text-slate-900 mb-4">
-                    Viajes Disponibles {pendingTrips.length > 0 && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-sm rounded-full">{pendingTrips.length}</span>}
-                  </h2>
-                  {!isOnline ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-200">
-                      <Car size={40} className="mx-auto text-slate-300 mb-3" />
-                      <p className="text-slate-600 font-medium">Conéctate para ver viajes disponibles</p>
-                      <Button onClick={() => setIsOnline(true)} className="mt-4 bg-green-500 hover:bg-green-600 text-white">Conectar Ahora</Button>
-                    </div>
-                  ) : pendingTrips.length === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-200">
-                      <Bell size={40} className="mx-auto text-slate-300 mb-3" />
-                      <p className="text-slate-600 font-medium">Esperando solicitudes...</p>
-                      <p className="text-sm text-slate-500 mt-1">Te notificaremos cuando haya un viaje</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {pendingTrips.map(trip => (
-                        <div key={trip.id} className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between mb-3">
-                            <div>
-                              <p className="font-semibold text-slate-900">{trip.clientName}</p>
-                              <p className="text-xs text-slate-500">{new Date(trip.requestedAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</p>
-                              {trip.isBid && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Puja</span>}
-                            </div>
-                            <p className="font-bold text-green-600 text-xl">{trip.fare}</p>
-                          </div>
-                          <div className="space-y-1.5 text-sm mb-4">
-                            <p className="text-slate-600"><MapPin size={13} className="inline mr-1 text-green-500" />{trip.pickup}</p>
-                            <p className="text-slate-600"><MapPin size={13} className="inline mr-1 text-red-500" />{trip.dropoff}</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleRejectTrip(trip.id)} className="text-red-500 border-red-200">Rechazar</Button>
-                            <Button size="sm" onClick={() => handleAcceptTrip(trip)} className="bg-green-500 hover:bg-green-600 text-white">Aceptar</Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              )}
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-4 order-1 lg:order-2 lg:sticky lg:top-4 self-start">
-              {/* Mapa de ubicación */}
-              <Card className="overflow-hidden p-0">
-                <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-900 text-sm">Mi Ubicación</h3>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isOnline ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
-                      {isOnline ? "● En línea" : "○ Desconectado"}
-                    </span>
-                    <Button
-                      onClick={() => setIsOnline(!isOnline)}
-                      className={`h-8 rounded-full px-3 text-xs font-semibold ${isOnline ? "bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20" : "bg-slate-200 hover:bg-slate-300 text-slate-700"}`}
-                    >
-                      {isOnline ? "Desconectar" : "Conectar"}
-                    </Button>
-                  </div>
-                </div>
-                <div className="relative w-full" style={{ height: "240px" }}>
-                  <LeafletMap
-                    height="100%"
-                    className="absolute inset-0 w-full h-full"
-                    onMapReady={(ref) => {
-                      mapRef.current = ref;
-                      navigator.geolocation?.getCurrentPosition(async (pos) => {
-                        const { latitude: lat, longitude: lng } = pos.coords;
-                        setCurrentLocation({ lat, lng });
-                        ref.setPickup(lat, lng, "Mi posición");
-                      });
-                    }}
-                  />
-                </div>
-                {currentTrip && (tripPhase === "accepted" || tripPhase === "in_progress") && (
-                  <div className="px-4 py-3 bg-blue-50 border-t border-blue-100">
-                    <p className="text-xs text-blue-700 font-medium">Ruta activa: {currentTrip.pickup} → {currentTrip.dropoff}</p>
-                  </div>
+                    )}
+                  </Card>
                 )}
-              </Card>
-              <Card className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200">
-                <h3 className="font-semibold text-green-900 mb-2">Ganancias de Hoy</h3>
-                <p className="text-3xl font-bold text-green-600">${earnings.toFixed(2)}</p>
-                <p className="text-sm text-green-700 mt-1">{completedCount} viajes completados</p>
-              </Card>
-              <Card className="p-4">
-                <h3 className="font-semibold text-slate-900 mb-3">Mi Perfil</h3>
-                <div className="space-y-2 text-sm">
-                  <div><p className="text-slate-500">Nombre</p><p className="font-medium text-slate-900">{user?.name}</p></div>
-                  <div><p className="text-slate-500">Email</p><p className="font-medium text-slate-900 text-xs">{user?.email}</p></div>
-                  <div className="flex items-center gap-2 pt-1"><Star size={16} className="text-yellow-500 fill-yellow-500" /><div><p className="text-xs text-slate-500">Calificación</p><p className="font-medium">5.0 / 5.0</p></div></div>
-                </div>
-              </Card>
+              </div>
+
+              <div className="space-y-4 lg:sticky lg:top-4 self-start">
+                <Card className="relative overflow-hidden border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-4 dark:border-emerald-400/25 dark:from-[oklch(0.18_0.05_165)] dark:to-[oklch(0.13_0.035_170)] dark:shadow-[0_16px_40px_-20px_rgba(16,185,129,0.45)]">
+                  <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-[radial-gradient(circle,oklch(0.76_0.18_148/0.28),transparent_66%)] blur-2xl dark:bg-[radial-gradient(circle,oklch(0.76_0.18_148/0.32),transparent_66%)]" />
+                  <h3 className="mb-2 font-semibold text-emerald-900 dark:text-emerald-300">Ganancias de hoy</h3>
+                  <p className="text-3xl font-bold text-emerald-600 dark:text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.75)]">${earnings.toFixed(2)}</p>
+                  <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300/80">{completedCount} viajes completados</p>
+                </Card>
+                <Card className="p-4">
+                  <h3 className="mb-3 font-semibold text-slate-900">Mi perfil</h3>
+                  <div className="space-y-2 text-sm">
+                    <div><p className="text-slate-500">Nombre</p><p className="font-medium text-slate-900">{user?.name}</p></div>
+                    <div><p className="text-slate-500">Email</p><p className="text-xs font-medium text-slate-900">{user?.email}</p></div>
+                    <div className="flex items-center gap-2 pt-1"><Star size={16} className="fill-yellow-500 text-yellow-500" /><div><p className="text-xs text-slate-500">Calificacion</p><p className="font-medium">5.0 / 5.0</p></div></div>
+                  </div>
+                </Card>
+              </div>
             </div>
           </div>
         )}
@@ -676,11 +763,11 @@ export default function DriverDashboard() {
         {/* TAB: GANANCIAS */}
         {activeTab === "earnings" && (
           <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-slate-900">Mis Ganancias</h1>
+            <h1 className="text-[1.35rem] font-semibold tracking-tight text-slate-900 dark:text-slate-100">Mis Ganancias</h1>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="p-5"><p className="text-sm text-slate-500">Hoy</p><p className="text-3xl font-bold text-green-600">${earnings.toFixed(2)}</p><p className="text-sm text-slate-500">{completedCount} viajes</p></Card>
-              <Card className="p-5"><p className="text-sm text-slate-500">Esta Semana</p><p className="text-3xl font-bold text-slate-900">$741.00</p><p className="text-sm text-slate-500">41 viajes</p></Card>
-              <Card className="p-5"><p className="text-sm text-slate-500">Este Mes</p><p className="text-3xl font-bold text-slate-900">$2,890.00</p><p className="text-sm text-slate-500">156 viajes</p></Card>
+              <Card className="p-5 dark:border-emerald-400/20 dark:bg-[oklch(0.18_0.05_165)] dark:shadow-[0_16px_40px_-20px_rgba(16,185,129,0.4)]"><p className="text-sm text-slate-500 dark:text-emerald-300/70">Hoy</p><p className="text-3xl font-bold text-green-600 dark:text-emerald-300">${earnings.toFixed(2)}</p><p className="text-sm text-slate-500 dark:text-slate-400">{completedCount} viajes</p></Card>
+              <Card className="p-5"><p className="text-sm text-slate-500 dark:text-slate-400">Esta Semana</p><p className="text-3xl font-bold text-slate-900 dark:text-slate-100">$741.00</p><p className="text-sm text-slate-500 dark:text-slate-400">41 viajes</p></Card>
+              <Card className="p-5"><p className="text-sm text-slate-500 dark:text-slate-400">Este Mes</p><p className="text-3xl font-bold text-slate-900 dark:text-slate-100">$2,890.00</p><p className="text-sm text-slate-500 dark:text-slate-400">156 viajes</p></Card>
             </div>
             <Card className="p-5">
               <h2 className="text-base font-bold text-slate-900 mb-4">Historial de Ganancias</h2>
@@ -691,7 +778,7 @@ export default function DriverDashboard() {
                       <p className="font-medium text-slate-900">{entry.date}</p>
                       <p className="text-sm text-slate-500">{i === 0 ? completedCount : entry.trips} viajes</p>
                     </div>
-                    <p className="font-bold text-green-600 text-lg">${i === 0 ? earnings.toFixed(2) : entry.earnings.toFixed(2)}</p>
+                    <p className="font-bold text-green-600 text-lg dark:text-emerald-300">${i === 0 ? earnings.toFixed(2) : entry.earnings.toFixed(2)}</p>
                   </div>
                 ))}
               </div>
@@ -702,7 +789,7 @@ export default function DriverDashboard() {
         {/* TAB: PAQUETES */}
         {activeTab === "parcels" && (
           <div className="space-y-6 max-w-4xl">
-            <h1 className="text-2xl font-bold text-slate-900">Entregas de Paquetes</h1>
+            <h1 className="text-[1.35rem] font-semibold tracking-tight text-slate-900 dark:text-slate-100">Entregas de Paquetes</h1>
             <DriverParcelPanel />
           </div>
         )}
@@ -710,10 +797,26 @@ export default function DriverDashboard() {
         {/* TAB: PERFIL */}
         {activeTab === "profile" && (
           <div className="space-y-6 max-w-lg">
-            <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
+            <h1 className="text-[1.35rem] font-semibold tracking-tight text-slate-900 dark:text-slate-100">Mi Perfil</h1>
             <Card className="p-5">
               <div className="flex items-center gap-4 mb-5">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-2xl font-bold">{user?.name?.[0]}</div>
+                <div className="relative w-16 h-16">
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+                    {user?.photoUrl ? (
+                      <img src={user.photoUrl} alt="Foto de perfil" className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{user?.name?.[0]}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => profilePhotoInputRef.current?.click()}
+                    className="absolute -right-1 -bottom-1 rounded-full bg-white p-1.5 shadow border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    title="Cambiar foto"
+                  >
+                    <Camera size={12} />
+                  </button>
+                </div>
                 <div>
                   <p className="text-xl font-bold text-slate-900">{user?.name}</p>
                   <p className="text-sm text-slate-500">{user?.email}</p>
@@ -735,7 +838,7 @@ export default function DriverDashboard() {
         {/* TAB: DOCUMENTOS */}
         {activeTab === "docs" && (
           <div className="space-y-6 max-w-lg">
-            <h1 className="text-2xl font-bold text-slate-900">Mis Documentos</h1>
+            <h1 className="text-[1.35rem] font-semibold tracking-tight text-slate-900 dark:text-slate-100">Mis Documentos</h1>
             <Card className="p-5">
               <div className="space-y-4">
                 {[
@@ -768,33 +871,75 @@ export default function DriverDashboard() {
           </div>
         )}
       </main>
-      {currentTrip && (tripPhase === "accepted" || tripPhase === "in_progress") && (
-        <div className="fixed bottom-0 left-0 right-0 z-[9985] border-t border-slate-200 bg-white/96 px-4 py-3 shadow-[0_-12px_40px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden">
+      {
+        <div className="border-t border-slate-800 bg-slate-950/98 px-4 py-3 shadow-[0_-16px_40px_rgba(2,6,23,0.55)] backdrop-blur-xl lg:hidden">
           <div className="mx-auto flex max-w-7xl flex-col gap-3">
-            <div className="flex items-center justify-between rounded-2xl bg-slate-950 px-4 py-3 text-white shadow-sm">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">Viaje activo</p>
-                <p className="text-sm font-semibold leading-tight">{currentTrip.pickup} → {currentTrip.dropoff}</p>
+            <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white shadow-sm">
+              <div className="min-w-0">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${hasActiveTrip ? "bg-emerald-400" : "bg-slate-500"} ${statusPulseOn ? "opacity-100" : "opacity-40"}`} />
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">{hasActiveTrip ? phaseLabel : "Sin viaje activo"}</p>
+                </div>
+                <p className="truncate text-sm font-semibold leading-tight">{hasActiveTrip ? `${currentTrip?.pickup} → ${currentTrip?.dropoff}` : "Activa modo en línea para recibir viajes"}</p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-white/45">ETA</p>
-                <p className="text-sm font-semibold text-emerald-300">{currentTrip.estimatedTime || "5 min"}</p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/45">{tripPhase === "rating" ? "Total" : "ETA"}</p>
+                {tripPhase === "rating" ? (
+                  <p className="flex items-center justify-end gap-1 text-sm font-bold text-emerald-300">
+                    <DollarSign size={13} /> {currentTrip?.fare}
+                  </p>
+                ) : (
+                  <p className="flex items-center justify-end gap-1 text-sm font-semibold text-emerald-300">
+                    <Clock size={13} /> {hasActiveTrip ? liveEtaLabel : "--"}
+                  </p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <Button onClick={() => handleNavigate(tripPhase === "accepted" ? currentTrip.pickup : currentTrip.dropoff)} className="h-12 gap-1.5 rounded-2xl bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
-                <Navigation size={15} /> Navegar
+              <Button
+                onClick={() => {
+                  if (!hasActiveTrip) { toast.info("No hay viaje activo para navegar"); return; }
+                  handleNavigate(tripPhase === "accepted" ? currentTrip!.pickup : currentTrip!.dropoff);
+                }}
+                disabled={!hasActiveTrip}
+                className="h-14 gap-1 rounded-2xl bg-blue-600 px-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-300"
+              >
+                <Navigation size={16} /> GPS
               </Button>
-              <Button onClick={handleMessagePassenger} className="h-12 gap-1.5 rounded-2xl bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700">
-                <MessageCircle size={15} /> Chat
+              <Button
+                onClick={() => {
+                  if (!hasActiveTrip) { toast.info("No hay viaje activo para abrir chat"); return; }
+                  handleMessagePassenger();
+                }}
+                disabled={!hasActiveTrip}
+                className="h-14 gap-1 rounded-2xl bg-emerald-600 px-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-300"
+              >
+                <MessageCircle size={16} /> Chat
               </Button>
-              <Button onClick={handleSOS} variant="outline" className="h-12 gap-1.5 rounded-2xl border-red-200 bg-white px-3 text-xs font-semibold text-red-500 shadow-sm hover:bg-red-50">
-                <AlertTriangle size={15} /> SOS
+              <Button onClick={handleSOS} variant="outline" className="h-14 gap-1 rounded-2xl border-red-300 bg-red-50 px-2 text-xs font-semibold text-red-600 shadow-sm hover:bg-red-100">
+                <AlertTriangle size={16} /> SOS
               </Button>
             </div>
+            {hasActiveTrip && (
+              <Button
+                onClick={() => {
+                  if (tripPhase === "accepted") handleArrived();
+                  else if (tripPhase === "arrived") handlePassengerOnBoard();
+                  else if (tripPhase === "on_board") handleStartTrip();
+                  else if (tripPhase === "in_progress") handleCompleteTrip();
+                }}
+                className="h-14 w-full rounded-2xl gap-1 text-sm font-bold text-white shadow-sm
+                  ${tripPhase === 'in_progress' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}"
+              >
+                {tripPhase === "accepted" ? (<><CheckCircle size={18} /> Llegué al pasajero</>)
+                  : tripPhase === "arrived" ? (<><CheckCircle size={18} /> Pasajero a bordo</>)
+                  : tripPhase === "on_board" ? (<><Navigation size={18} /> Iniciar viaje</>)
+                  : (<><CheckCircle size={18} /> Finalizar viaje</>)}
+              </Button>
+            )}
           </div>
         </div>
-      )}
+      }
       {/* Chat seguro — visible cuando hay viaje activo */}
       {currentTrip && (currentTrip.status === "accepted" || currentTrip.status === "in_progress") && (
         <div id="driver-chat-anchor" className="fixed bottom-20 right-4 z-[9990]">
@@ -804,16 +949,24 @@ export default function DriverDashboard() {
             userName={user?.name || "Conductor"}
             role="driver"
             otherPartyName={currentTrip.clientName || "Pasajero"}
+            showLauncher={false}
+            fullScreen
+            enableBackClose
+            forceOpen={chatOpen}
+            onOpenChange={setChatOpen}
           />
         </div>
       )}
-      <GlobalMascotAssistant
-        storageKey="wt_mascot_driver"
-        title="Asistente Driver"
-        mood={driverMascotMood}
-        messages={driverMascotMessages}
-      />
-      <SafetyTipsButton audience="drivers" />
+      {showFloatingHelpers && (
+        <GlobalMascotAssistant
+          storageKey="wt_mascot_driver"
+          title="Asistente Driver"
+          mood={driverMascotMood}
+          messages={driverMascotMessages}
+          className="left-3 right-auto bottom-52 sm:bottom-5 sm:right-5 sm:left-auto"
+        />
+      )}
+      {showFloatingHelpers && <SafetyTipsButton audience="drivers" position="bottom-left" />}
     </div>
   );
 }

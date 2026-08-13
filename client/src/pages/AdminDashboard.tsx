@@ -34,6 +34,9 @@ type EditorView = "form" | "preview";
 interface Driver { id: string; name: string; phone: string; email: string; vehicle: string; plate: string; status: "active" | "inactive" | "suspended" | "pending"; rating: number; trips: number; earnings: string; joinDate: string; online: boolean; permissions: { canAcceptTrips: boolean; canSetOwnFare: boolean; canViewClientPhone: boolean; canCancelTrip: boolean; }; }
 interface Client { id: string; name: string; phone: string; email: string; trips: number; spent: string; rating: number; joinDate: string; status: "active" | "suspended"; }
 interface SentMessage { id: string; to: string; subject: string; body: string; channel: string; date: string; }
+interface ActiveDriverRow { id: number | string; firstName: string; lastName: string; email: string | null; vehicle: string; licensePlate: string | null; currentLocation: { lat?: number | null; lng?: number | null } | null; status: string; isOnline: boolean | number; online?: boolean | number; recentTrips?: unknown; }
+interface ActiveTripRow { id: number | string; clientId: number | string; driverId: number | string | null; vehicleId: number | string | null; pickupLocation: string; dropoffLocation: string; status: string; fare: number | string; requestedAt: string; clientFirstName: string; clientLastName: string; driverFirstName: string; driverLastName: string; vehicle: string; licensePlate: string; }
+interface CompletedTripRow { id: number | string; clientId: number | string; driverId: number | string | null; fare: number | string; pickupLocation: string; dropoffLocation: string; status: string; completedAt: string; requestedAt: string; clientFirstName: string; clientLastName: string; driverFirstName: string; driverLastName: string; }
 
 const MOCK_DRIVERS: Driver[] = [
   { id: "d1", name: "Carlos Mendoza", phone: "+52 55 1234 5678", email: "carlos@email.com", vehicle: "Toyota Corolla 2022", plate: "ABC-123", status: "active", rating: 4.9, trips: 342, earnings: "$8,450", joinDate: "2024-01-15", online: true, permissions: { canAcceptTrips: true, canSetOwnFare: false, canViewClientPhone: true, canCancelTrip: true } },
@@ -113,17 +116,13 @@ export default function AdminDashboard() {
   const [previewKey, setPreviewKey] = useState(0);
 
   // Query for completed trips today
-  const { data: completedTripsTodayData, isLoading: loadingCompleted } = trpc.adminDashboard.completedTripsToday.useQuery();
-  const [completedTripsToday, setCompletedTripsToday] = useState(
-    completedTripsTodayData ?? []
-  );
-  const { data: activeDriversData, isLoading: loadingDrivers } = trpc.adminDashboard.activeDrivers.useQuery();
-  const { data: activeTripsData, isLoading: loadingTrips } = trpc.adminDashboard.activeTrips.useQuery();
+  const { data: completedTripsTodayData, isLoading: loadingCompleted } = trpc.adminDashboard.completedTripsToday.useQuery(undefined, { refetchInterval: 15000 });
+  const [completedTripsToday, setCompletedTripsToday] = useState<CompletedTripRow[]>((completedTripsTodayData ?? []) as unknown as CompletedTripRow[]);
+  const { data: activeDriversData, isLoading: loadingDrivers } = trpc.adminDashboard.activeDrivers.useQuery(undefined, { refetchInterval: 10000 });
+  const { data: activeTripsData, isLoading: loadingTrips } = trpc.adminDashboard.activeTrips.useQuery(undefined, { refetchInterval: 10000 });
 
-  const [activeDrivers, setActiveDrivers] = useState(activeDriversData ?? []);
-  const [activeTrips, setActiveTrips] = useState(activeTripsData ?? []);
-  const [activeDrivers, setActiveDrivers] = useState([]);
-  const [activeTrips, setActiveTrips] = useState([]);
+  const [activeDrivers, setActiveDrivers] = useState<ActiveDriverRow[]>((activeDriversData ?? []) as unknown as ActiveDriverRow[]);
+  const [activeTrips, setActiveTrips] = useState<ActiveTripRow[]>((activeTripsData ?? []) as unknown as ActiveTripRow[]);
 
   // Sync local editor state from global config on mount
   useEffect(() => {
@@ -168,9 +167,30 @@ export default function AdminDashboard() {
 
   const handleMapReady = useCallback((ref: LeafletMapRef) => {
     mapRef.current = ref;
-    // Spawn animated vehicle markers for all drivers via LeafletMap
-    ref.spawnVehicles(19.4326, -99.1332);
-  }, []);
+    // Fallback: if no real drivers with location are available, show demo vehicles
+    const located = activeDrivers.filter(d => d.currentLocation?.lat != null && d.currentLocation?.lng != null);
+    if (located.length === 0) {
+      ref.spawnVehicles(19.4326, -99.1332);
+    }
+  }, [activeDrivers]);
+
+  // Sync live driver markers to the map whenever activeDrivers change
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const markers = activeDrivers.map(d => ({
+      id: d.id,
+      name: `${d.firstName} ${d.lastName ?? ""}`.trim(),
+      vehicle: d.vehicle,
+      status: d.status,
+      isOnline: Boolean(d.isOnline),
+      lat: d.currentLocation?.lat ?? null,
+      lng: d.currentLocation?.lng ?? null,
+    }));
+    const located = markers.filter(m => m.lat != null && m.lng != null);
+    if (located.length > 0) {
+      mapRef.current.setDrivers(markers);
+    }
+  }, [activeDrivers]);
 
   const handleDriverAction = (driverId: string, action: "approve" | "suspend" | "activate" | "delete") => {
     setDrivers(prev => prev.map(d => {
@@ -215,7 +235,7 @@ export default function AdminDashboard() {
   const tabs: { id: Tab; label: string; icon: any; badge?: number; dot?: boolean }[] = [
     { id: "overview", label: "Dashboard", icon: LayoutDashboard },
     { id: "godsEye", label: "God's Eye", icon: Eye, dot: true },
-    { id: "drivers", label: "Conductores", icon: Car, badge: drivers.filter(d => d.status === "pending").length },
+    { id: "drivers", label: "Conductores", icon: Car, badge: activeDrivers.filter(d => d.status === "pending").length },
     { id: "clients", label: "Clientes", icon: Users },
     { id: "trips", label: "Viajes", icon: Navigation },
     { id: "messages", label: "Mensajes", icon: MessageCircle },
@@ -290,7 +310,7 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: "Conductores Activos", value: `${drivers.filter(d => d.status === "active").length}/${drivers.length}`, sub: `${drivers.filter(d => d.online).length} en línea`, icon: Car, color: "text-green-600", bg: "bg-green-50" },
+                  { label: "Conductores Activos", value: `${drivers.filter(d => d.status === "active").length}/${drivers.length}`, sub: `${activeDrivers.filter(d => d.isOnline).length} en línea`, icon: Car, color: "text-green-600", bg: "bg-green-50" },
                   { label: "Clientes Totales", value: clients.length, sub: `${clients.filter(c => c.status === "active").length} activos`, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
                   { label: "Viajes Este Mes", value: "1,350", sub: "+8% vs mes anterior", icon: Navigation, color: "text-purple-600", bg: "bg-purple-50" },
                  { label: "Viajes Hoy", value: `${completedTripsToday.length}`, sub: `${completedTripsToday.filter((d: any) => d.status === "completed").length} finalizados`, icon: CheckCircle, color: "text-green-600", bg: "bg-green-50" },
@@ -324,11 +344,11 @@ export default function AdminDashboard() {
                   <div className="space-y-1 mt-2">{vehicleData.map(v => (<div key={v.name} className="flex items-center justify-between text-xs"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ background: v.color }} /><span className="text-slate-600">{v.name}</span></div><span className="font-semibold">{v.value}%</span></div>))}</div>
                 </Card>
               </div>
-              {drivers.filter(d => d.status === "pending").length > 0 && (
+              {activeDrivers.filter(d => d.status === "pending").length > 0 && (
                 <Card className="p-4 border-yellow-200 bg-yellow-50">
                   <div className="flex items-center gap-2">
                     <AlertTriangle size={16} className="text-yellow-600" />
-                    <p className="text-sm font-semibold text-yellow-800">{drivers.filter(d => d.status === "pending").length} conductor(es) esperando aprobación</p>
+                    <p className="text-sm font-semibold text-yellow-800">{activeDrivers.filter(d => d.status === "pending").length} conductor(es) esperando aprobación</p>
                     <Button size="sm" onClick={() => setActiveTab("drivers")} className="ml-auto bg-yellow-500 hover:bg-yellow-600 text-white text-xs gap-1">Ver <ChevronRight size={12} /></Button>
                   </div>
                 </Card>
@@ -369,9 +389,9 @@ export default function AdminDashboard() {
                   <Card className="p-4">
                     <h3 className="font-semibold text-slate-900 text-sm mb-2">Estadísticas Live</h3>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-slate-500">En línea</span><span className="font-bold text-green-600">{drivers.filter(d => d.online).length}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Pendientes</span><span className="font-bold text-yellow-600">{drivers.filter(d => d.status === "pending").length}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Suspendidos</span><span className="font-bold text-red-600">{drivers.filter(d => d.status === "suspended").length}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">En línea</span><span className="font-bold text-green-600">{activeDrivers.filter(d => d.isOnline).length}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Pendientes</span><span className="font-bold text-yellow-600">{activeDrivers.filter(d => d.status === "pending").length}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Suspendidos</span><span className="font-bold text-red-600">{activeDrivers.filter(d => d.status === "suspended").length}</span></div>
                     </div>
                   </Card>
                 </div>
@@ -382,7 +402,7 @@ export default function AdminDashboard() {
           {/* ── CONDUCTORES ── */}
           {activeTab === "drivers" && (
             <div className="space-y-4">
-              {drivers.filter(d => d.status === "pending").length > 0 && (
+              {activeDrivers.filter(d => d.status === "pending").length > 0 && (
                 <Card className="p-4 border-yellow-200 bg-yellow-50">
                   <div className="flex items-center gap-2 mb-3"><AlertTriangle size={16} className="text-yellow-600" /><h3 className="font-semibold text-yellow-800">Pendientes de aprobación</h3></div>
                   {drivers.filter(d => d.status === "pending").map(d => (
@@ -407,7 +427,7 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-100">
                       {drivers.filter(d => !search || d.name.toLowerCase().includes(search.toLowerCase())).map(d => (
                         <tr key={d.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="relative"><div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-sm">{d.firstName[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-white rounded-full" />}</div><div><p className="font-semibold text-slate-900">{d.name}</p><p className="text-xs text-slate-500">{d.phone}</p></div></div></td>
+                          <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="relative"><div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-sm">{d.name[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-white rounded-full" />}</div><div><p className="font-semibold text-slate-900">{d.name}</p><p className="text-xs text-slate-500">{d.phone}</p></div></div></td>
                           <td className="px-4 py-3"><p className="text-slate-900">{d.vehicle}</p><p className="text-xs text-slate-500 font-mono">{d.plate}</p></td>
                           <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[d.status]}`}>{statusLabels[d.status]}</span></td>
                           <td className="px-4 py-3"><div className="flex items-center gap-1"><Star size={13} className="text-yellow-500 fill-yellow-500" /><span className="font-semibold">{d.rating || "—"}</span></div></td>
@@ -471,22 +491,33 @@ export default function AdminDashboard() {
           {activeTab === "trips" && (
             <div className="space-y-4">
               <div className="grid grid-cols-4 gap-3">
-                {[{ label: "Total Hoy", value: "47", color: "text-slate-700" }, { label: "Completados", value: "38", color: "text-green-600" }, { label: "En progreso", value: "6", color: "text-blue-600" }, { label: "Cancelados", value: "3", color: "text-red-600" }].map((s, i) => (
+                {[
+                  { label: "En progreso", value: activeTrips.filter(t => t.status === "in_progress").length, color: "text-blue-600" },
+                  { label: "Solicitados", value: activeTrips.filter(t => t.status === "requested").length, color: "text-yellow-600" },
+                  { label: "Aceptados", value: activeTrips.filter(t => t.status === "accepted").length, color: "text-purple-600" },
+                  { label: "Completados hoy", value: completedTripsToday.length, color: "text-green-600" },
+                ].map((s, i) => (
                   <Card key={i} className="p-4 text-center"><p className={`text-2xl font-bold ${s.color}`}>{s.value}</p><p className="text-xs text-slate-500 mt-1">{s.label}</p></Card>
                 ))}
               </div>
               <Card className="p-5">
                 <h3 className="font-semibold text-slate-900 mb-4">Viajes en Tiempo Real</h3>
                 <div className="space-y-3">
-                  {[{ client: "María García", driver: "Carlos M.", from: "Centro", to: "Aeropuerto", fare: "$42", status: "in_progress", time: "10:32" }, { client: "Juan López", driver: "Pedro R.", from: "Metro", to: "Hotel", fare: "$18", status: "completed", time: "10:45" }, { client: "Ana Martínez", driver: "—", from: "Hospital", to: "Centro", fare: "$15", status: "requested", time: "10:51" }].map((t, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2.5 h-2.5 rounded-full ${t.status === "in_progress" ? "bg-blue-500 animate-pulse" : t.status === "completed" ? "bg-green-500" : "bg-yellow-500"}`} />
-                        <div><p className="text-sm font-semibold text-slate-900">{t.client} → {t.driver}</p><p className="text-xs text-slate-500">{t.from} → {t.to}</p></div>
+                  {loadingTrips ? (
+                    <p className="text-sm text-slate-500">Cargando viajes...</p>
+                  ) : activeTrips.length === 0 ? (
+                    <p className="text-sm text-slate-500">No hay viajes activos en este momento.</p>
+                  ) : (
+                    [...activeTrips, ...completedTripsToday].slice(0, 20).map(t => (
+                      <div key={String(t.id)} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2.5 h-2.5 rounded-full ${t.status === "in_progress" ? "bg-blue-500 animate-pulse" : t.status === "completed" ? "bg-green-500" : "bg-yellow-500"}`} />
+                          <div><p className="text-sm font-semibold text-slate-900">{(t.clientFirstName ? `${t.clientFirstName} ${t.clientLastName ?? ""}` : "Cliente").trim()} → {t.driverFirstName ? `${t.driverFirstName} ${t.driverLastName ?? ""}` : "Sin conductor"}</p><p className="text-xs text-slate-500">{t.pickupLocation} → {t.dropoffLocation}</p></div>
+                        </div>
+                        <div className="text-right"><p className="font-bold text-green-600">${typeof t.fare === "number" ? t.fare.toFixed(2) : t.fare}</p><p className="text-xs text-slate-500">{t.status === "in_progress" ? "En progreso" : t.status === "completed" ? "Completado" : "Solicitado"}</p></div>
                       </div>
-                      <div className="text-right"><p className="font-bold text-green-600">{t.fare}</p><p className="text-xs text-slate-500">{t.time}</p></div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </Card>
             </div>
@@ -505,7 +536,7 @@ export default function AdminDashboard() {
                 {drivers.filter(d => d.status !== "pending").map(d => (
                   <Card key={d.id} className="p-5">
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="relative"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold">{d.firstName[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-white rounded-full" />}</div>
+                      <div className="relative"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold">{d.name[0]}</div>{d.online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-white rounded-full" />}</div>
                       <div className="flex-1"><p className="font-semibold text-slate-900">{d.name}</p><p className="text-xs text-slate-500">{d.vehicle} · <span className={`font-medium ${d.status === "active" ? "text-green-600" : "text-red-600"}`}>{statusLabels[d.status]}</span></p></div>
                       <div className="flex items-center gap-1"><Star size={13} className="text-yellow-500 fill-yellow-500" /><span className="text-sm font-bold text-slate-700">{d.rating || "—"}</span></div>
                     </div>

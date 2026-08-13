@@ -32,6 +32,7 @@ const categoryColors: Record<string, string> = {
 
 export default function SafetyTipsButton({ audience, position = "bottom-right" }: Props) {
   const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [pulse, setPulse] = useState(true);
@@ -44,6 +45,12 @@ export default function SafetyTipsButton({ audience, position = "bottom-right" }
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    if (!visible || open) return;
+    const hideTimer = setTimeout(() => setVisible(false), 20000);
+    return () => clearTimeout(hideTimer);
+  }, [visible, open]);
+
   const categories = ["all", ...Array.from(new Set(tips.map((t: any) => String(t.category))))];
   const filtered = filterCategory === "all" ? tips : tips.filter((t: any) => t.category === filterCategory);
   const current = filtered[currentIndex] || filtered[0];
@@ -51,7 +58,11 @@ export default function SafetyTipsButton({ audience, position = "bottom-right" }
   const prev = () => setCurrentIndex(i => (i - 1 + filtered.length) % filtered.length);
   const next = () => setCurrentIndex(i => (i + 1) % filtered.length);
 
-  const posClass = position === "bottom-right" ? "right-4 bottom-20" : "left-4 bottom-20";
+  const posClass = position === "bottom-right"
+    ? "right-3 bottom-28 sm:right-4 sm:bottom-20"
+    : "left-3 bottom-28 sm:left-4 sm:bottom-20";
+
+  if (!visible && !open) return null;
 
   return (
     <>
@@ -71,6 +82,18 @@ export default function SafetyTipsButton({ audience, position = "bottom-right" }
             {tips.length > 9 ? "9+" : tips.length}
           </span>
         )}
+        <span
+          role="button"
+          aria-label="Cerrar bombilla"
+          title="Cerrar"
+          onClick={(e) => {
+            e.stopPropagation();
+            setVisible(false);
+          }}
+          className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-slate-900/85 text-white text-[10px] leading-none flex items-center justify-center"
+        >
+          x
+        </span>
       </button>
 
       {/* Modal */}

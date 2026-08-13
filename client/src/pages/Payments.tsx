@@ -95,7 +95,7 @@ export default function Payments() {
       createCheckout.mutate({ planId: plan.id, planName: plan.name, amount: plan.price });
     } else {
       // PayPal redirect
-      const paypalUrl = `https://www.paypal.com/checkoutnow?amount=${plan.price}&currency=USD&description=WhatsAppTaxi+${plan.name}`;
+      const paypalUrl = `https://www.paypal.com/checkoutnow?amount=${plan.price}&currency=USD&description=Passenger+${plan.name}`;
       window.open(paypalUrl, "_blank");
       toast.success("Redirigiendo a PayPal...");
       setLoadingPlan(null);
@@ -112,7 +112,7 @@ export default function Payments() {
               <img src="/assets-storage/logo-icon_34950e08.png" alt="Logo" className="w-full h-full object-cover" style={{ background: "oklch(0.76 0.18 148)" }} />
             </div>
             <span className="text-white font-bold text-xl" style={{ fontFamily: "'Sora', sans-serif" }}>
-              WhatsApp<span className="text-[oklch(0.76_0.18_148)]">Taxi</span>
+              Passenger
             </span>
           </a>
           <h1 className="text-4xl font-extrabold text-white mb-4" style={{ fontFamily: "'Sora', sans-serif" }}>

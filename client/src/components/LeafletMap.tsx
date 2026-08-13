@@ -7,11 +7,22 @@ export interface LeafletMapRef {
   getRoute: () => Promise<{ distanceKm: number; durationMin: number } | null>;
   spawnVehicles: (lat: number, lng: number) => void;
   panTo: (lat: number, lng: number) => void;
+  setDrivers: (drivers: DriverMarker[]) => void;
   setRouteBetween: (
     start: { lat: number; lng: number; label?: string },
     end: { lat: number; lng: number; label?: string },
     options?: { vehicleLabel?: string; vehicleEmoji?: string; animate?: boolean }
   ) => Promise<{ distanceKm: number; durationMin: number } | null>;
+}
+
+export interface DriverMarker {
+  id: number | string;
+  name: string;
+  vehicle: string;
+  status: string;
+  isOnline: boolean | number;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 interface Props {
@@ -28,6 +39,7 @@ export default function LeafletMap({ height = "100%", onMapReady, className = ""
   const routeLayerRef = useRef<any>(null);
   const liveVehicleMarkerRef = useRef<any>(null);
   const vehicleMarkersRef = useRef<any[]>([]);
+  const driverMarkersRef = useRef<any[]>([]);
   const vehicleAnimRef = useRef<any>(null);
   const liveRouteAnimRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -77,17 +89,32 @@ export default function LeafletMap({ height = "100%", onMapReady, className = ""
       map.setView([19.4326, -99.1332], 13);
       mapRef.current = map;
 
-      // Try to get user location
-      navigator.geolocation?.getCurrentPosition((pos) => {
-        map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-        const marker = L.marker([pos.coords.latitude, pos.coords.longitude], {
-          icon: L.divIcon({ html: '<div style="width:14px;height:14px;background:#25D366;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(37,211,102,0.5)"></div>', className: "", iconAnchor: [7, 7] }),
-        }).addTo(map).bindPopup("📍 Tu ubicación");
-        pickupMarkerRef.current = marker;
-        spawnVehiclesInternal(L, map, pos.coords.latitude, pos.coords.longitude);
-      }, () => {
-        spawnVehiclesInternal(L, map, 19.4326, -99.1332);
-      });
+      // Auto-locate only if geolocation permission is already granted.
+      const initWithFallback = () => spawnVehiclesInternal(L, map, 19.4326, -99.1332);
+      if (navigator.geolocation && navigator.permissions) {
+        navigator.permissions
+          .query({ name: "geolocation" })
+          .then((permission) => {
+            if (permission.state !== "granted") {
+              initWithFallback();
+              return;
+            }
+            navigator.geolocation?.getCurrentPosition(
+              (pos) => {
+                map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+                const marker = L.marker([pos.coords.latitude, pos.coords.longitude], {
+                  icon: L.divIcon({ html: '<div style="width:14px;height:14px;background:#25D366;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(37,211,102,0.5)"></div>', className: "", iconAnchor: [7, 7] }),
+                }).addTo(map).bindPopup("📍 Tu ubicación");
+                pickupMarkerRef.current = marker;
+                spawnVehiclesInternal(L, map, pos.coords.latitude, pos.coords.longitude);
+              },
+              initWithFallback
+            );
+          })
+          .catch(initWithFallback);
+      } else {
+        initWithFallback();
+      }
 
       setReady(true);
 
@@ -112,6 +139,57 @@ export default function LeafletMap({ height = "100%", onMapReady, className = ""
             m.setLatLng([pos.lat + (Math.random() - 0.5) * 0.0003, pos.lng + (Math.random() - 0.5) * 0.0003]);
           });
         }, 1500);
+      };
+
+      const renderDrivers = (drivers: DriverMarker[]) => {
+        if (!L || !map) return;
+        driverMarkersRef.current.forEach(m => m.remove());
+        driverMarkersRef.current = [];
+
+        const statusColor: Record<string, string> = {
+          available: "#25D366",
+          active: "#25D366",
+          in_trip: "#3B82F6",
+          in_progress: "#3B82F6",
+          busy: "#3B82F6",
+          inactive: "#94A3B8",
+          pending: "#F59E0B",
+          suspended: "#EF4444",
+        };
+
+        drivers.forEach(driver => {
+          if (driver.lat == null || driver.lng == null) return;
+          const color = statusColor[driver.status] ?? (driver.isOnline ? "#25D366" : "#94A3B8");
+          const initials = (driver.name || "?").split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
+          const emoji = driver.vehicle?.toLowerCase().includes("motor") ? "🏍️" : "🚗";
+          const marker = L.marker([driver.lat, driver.lng], {
+            icon: L.divIcon({
+              html: `
+                <div style="display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 10px;border-radius:999px;background:rgba(15,23,42,0.95);border:1px solid rgba(255,255,255,0.15);box-shadow:0 10px 22px rgba(0,0,0,0.25);color:white;font-size:15px;font-weight:700;">
+                  <span style="font-size:16px;line-height:1">${emoji}</span>
+                  <span>${initials}</span>
+                  <span style="width:8px;height:8px;border-radius:999px;background:${color};box-shadow:0 0 0 4px ${color}33;"></span>
+                </div>
+              `,
+              className: "",
+              iconAnchor: [20, 18],
+            }),
+          }).addTo(map);
+          marker.bindPopup(
+            `<div style="font-family:sans-serif;min-width:170px;">
+              <div style="font-weight:700;font-size:14px;margin-bottom:2px;">${driver.name}</div>
+              <div style="font-size:12px;color:#666;margin-bottom:4px;">${driver.vehicle || "—"}</div>
+              <div style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;color:#fff;background:${color};">${driver.isOnline ? "En línea" : "Desconectado"}</div>
+            </div>`
+          );
+          driverMarkersRef.current.push(marker);
+        });
+
+        // Center map on the cluster of drivers if any were rendered
+        if (driverMarkersRef.current.length > 0) {
+          const group = L.featureGroup(driverMarkersRef.current);
+          map.fitBounds(group.getBounds().pad(0.4), { maxZoom: 14 });
+        }
       };
 
       const ref: LeafletMapRef = {
@@ -158,6 +236,7 @@ export default function LeafletMap({ height = "100%", onMapReady, className = ""
           return null;
         },
         spawnVehicles: (lat, lng) => spawnVehiclesInternal(L, map, lat, lng),
+        setDrivers: (drivers) => renderDrivers(drivers),
         panTo: (lat, lng) => map.setView([lat, lng], 15),
         setRouteBetween: async (start, end, options) => {
           stopLiveRouteAnimation();

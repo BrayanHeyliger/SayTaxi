@@ -522,5 +522,103 @@
 }
 
 .animate-mascot-walk {
-  animation: mascot-walk 2.4s ease-in-out infinite;
+  animation: mascot-walk 4.8s ease-in-out infinite;
+}
+
+/* =============================================
+   DARK MODE COMPLETO — Paneles (Conductor / Cliente)
+   Overrides con :where() para baja especificidad,
+   así los dark: explícitos de Tailwind siguen ganando.
+   ============================================= */
+:where(.dark .wt-panel) {
+  color-scheme: dark;
+}
+
+/* =============================================
+   GLASSMORPHISM PREMIUM — Paneles
+   Fondo con orbes de color para dar profundidad
+   al backdrop-filter de las tarjetas glass.
+   ============================================= */
+.wt-panel {
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 38%),
+    radial-gradient(circle at 88% 10%, color-mix(in oklab, oklch(0.6 0.15 250) 18%, transparent), transparent 36%),
+    linear-gradient(165deg, #fbfdff 0%, #f3f6fb 42%, #f8fafc 100%);
+}
+.dark .wt-panel {
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 40%),
+    radial-gradient(circle at 88% 10%, color-mix(in oklab, oklch(0.5 0.12 250) 16%, transparent), transparent 38%),
+    #0f172a;
+}
+
+/* Tarjetas glass: translúcidas + blur sobre el fondo */
+:where(.wt-panel) [data-slot="card"] {
+  background-color: color-mix(in oklab, var(--card) 64%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+  border-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+  box-shadow: 0 12px 40px -18px color-mix(in oklab, var(--foreground) 22%, transparent);
+}
+:where(.dark .wt-panel) [data-slot="card"] {
+  background-color: color-mix(in oklab, var(--card) 55%, transparent);
+  border-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+  box-shadow: 0 16px 48px -20px color-mix(in oklab, var(--foreground) 26%, transparent);
+}
+
+/* Fondos claros hardcodeados -> tokens oscuros */
+:where(.dark .wt-panel) .bg-white,
+:where(.dark .wt-panel) .bg-white\/90,
+:where(.dark .wt-panel) .bg-white\/95,
+:where(.dark .wt-panel) .bg-white\/80 {
+  background-color: var(--card);
+}
+
+:where(.dark .wt-panel) .bg-slate-50,
+:where(.dark .wt-panel) .bg-slate-100 {
+  background-color: var(--muted);
+}
+
+:where(.dark .wt-panel) .bg-blue-50 {
+  background-color: color-mix(in oklab, var(--card) 60%, oklch(0.55 0.18 250));
+}
+:where(.dark .wt-panel) .bg-emerald-50,
+:where(.dark .wt-panel) .bg-green-50 {
+  background-color: color-mix(in oklab, var(--card) 65%, var(--primary));
+}
+:where(.dark .wt-panel) .bg-yellow-100 {
+  background-color: color-mix(in oklab, var(--card) 70%, oklch(0.8 0.15 90));
+}
+:where(.dark .wt-panel) .bg-red-50 {
+  background-color: color-mix(in oklab, var(--card) 70%, oklch(0.6 0.2 20));
+}
+
+/* Textos slate -> grises claros */
+:where(.dark .wt-panel) .text-slate-900,
+:where(.dark .wt-panel) .text-slate-800 {
+  color: oklch(0.92 0.005 100);
+}
+:where(.dark .wt-panel) .text-slate-700 {
+  color: oklch(0.80 0.005 100);
+}
+:where(.dark .wt-panel) .text-slate-600,
+:where(.dark .wt-panel) .text-slate-500 {
+  color: oklch(0.68 0.01 80);
+}
+:where(.dark .wt-panel) .text-slate-300 {
+  color: oklch(0.55 0.01 80);
+}
+
+/* Bordes slate -> oscuros */
+:where(.dark .wt-panel) .border-slate-100,
+:where(.dark .wt-panel) .border-slate-200,
+:where(.dark .wt-panel) .border-slate-300 {
+  border-color: oklch(0.25 0.01 250);
+}
+
+/* Gradientes claros de las tarjetas de ganancias */
+:where(.dark .wt-panel) .from-emerald-50,
+:where(.dark .wt-panel) .to-green-50 {
+  --tw-gradient-from: color-mix(in oklab, var(--card) 70%, var(--primary));
+  --tw-gradient-to: color-mix(in oklab, var(--card) 70%, var(--primary));
 }

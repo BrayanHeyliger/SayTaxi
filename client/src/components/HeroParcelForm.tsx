@@ -41,18 +41,25 @@ export function HeroParcelForm({ onSubmit, onNavigateToDashboard }: HeroParcelFo
 
   const handleMapReady = useCallback((ref: LeafletMapRef) => {
     mapRef.current = ref;
-    navigator.geolocation?.getCurrentPosition(async (pos) => {
-      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setPickupCoords(coords);
-      const delta = 0.27;
-      setUserViewbox([coords.lng - delta, coords.lat - delta, coords.lng + delta, coords.lat + delta]);
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`, { headers: { "Accept-Language": "es" } });
-        const data = await res.json();
-        if (data.display_name) setPickupAddress(data.display_name.split(",").slice(0, 2).join(","));
-        if (data.address?.country_code) setUserCountryCode(data.address.country_code);
-      } catch {}
-    });
+    if (!navigator.geolocation || !navigator.permissions) return;
+    navigator.permissions
+      .query({ name: "geolocation" })
+      .then((permission) => {
+        if (permission.state !== "granted") return;
+        navigator.geolocation?.getCurrentPosition(async (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setPickupCoords(coords);
+          const delta = 0.27;
+          setUserViewbox([coords.lng - delta, coords.lat - delta, coords.lng + delta, coords.lat + delta]);
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`, { headers: { "Accept-Language": "es" } });
+            const data = await res.json();
+            if (data.display_name) setPickupAddress(data.display_name.split(",").slice(0, 2).join(","));
+            if (data.address?.country_code) setUserCountryCode(data.address.country_code);
+          } catch {}
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const handlePickupSelect = (address: string, lat: number, lng: number) => {

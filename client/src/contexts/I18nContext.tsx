@@ -123,7 +123,7 @@ const translations: Record<Lang, Translations> = {
       ]},
     },
     pricing: { badge: "Plans", title: "Transparent pricing, no surprises", sub: "Choose the plan that best fits your fleet", monthly: "Monthly", annual: "Annual", save: "Save 20%", popular: "Most popular", getStarted: "Get started", contact: "Contact sales" },
-    cta: { title: "Ready to modernize your fleet?", sub: "Join over 2,400 taxi companies already using WhatsApp Taxi", client: "Request a Ride", driver: "Become a Driver" },
+    cta: { title: "Ready to modernize your fleet?", sub: "Join over 2,400 taxi companies already using Passenger", client: "Request a Ride", driver: "Become a Driver" },
     footer: { rights: "All rights reserved", privacy: "Privacy", terms: "Terms", support: "Support" },
     login: { title: "Welcome back", sub: "Sign in to your account", email: "Email address", password: "Password", submit: "Sign in", noAccount: "Don't have an account?", register: "Sign up", forgot: "Forgot your password?" },
     register: { title: "Create account", sub: "Choose how you want to use the platform", asClient: "I'm a Client", asDriver: "I'm a Driver", asFleet: "Company / Fleet", clientDesc: "Request rides easily", driverDesc: "Earn money driving", fleetDesc: "Manage your own fleet", name: "Full name", email: "Email address", phone: "Phone number", password: "Password", submit: "Create account", haveAccount: "Already have an account?", login: "Sign in" },
@@ -174,7 +174,7 @@ const translations: Record<Lang, Translations> = {
       ]},
     },
     pricing: { badge: "Plans", title: "Tarifs transparents, sans surprises", sub: "Choisissez le plan qui correspond le mieux à votre flotte", monthly: "Mensuel", annual: "Annuel", save: "Économisez 20%", popular: "Le plus populaire", getStarted: "Commencer", contact: "Contacter les ventes" },
-    cta: { title: "Prêt à moderniser votre flotte?", sub: "Rejoignez plus de 2 400 entreprises de taxi qui utilisent déjà WhatsApp Taxi", client: "Demander un trajet", driver: "Devenir chauffeur" },
+    cta: { title: "Prêt à moderniser votre flotte?", sub: "Rejoignez plus de 2 400 entreprises de taxi qui utilisent déjà Passenger", client: "Demander un trajet", driver: "Devenir chauffeur" },
     footer: { rights: "Tous droits réservés", privacy: "Confidentialité", terms: "Conditions", support: "Support" },
     login: { title: "Bon retour", sub: "Connectez-vous à votre compte", email: "Adresse e-mail", password: "Mot de passe", submit: "Se connecter", noAccount: "Vous n'avez pas de compte?", register: "S'inscrire", forgot: "Mot de passe oublié?" },
     register: { title: "Créer un compte", sub: "Choisissez comment vous souhaitez utiliser la plateforme", asClient: "Je suis client", asDriver: "Je suis chauffeur", asFleet: "Entreprise / Flotte", clientDesc: "Demandez des trajets facilement", driverDesc: "Gagnez de l'argent en conduisant", fleetDesc: "Gérez votre propre flotte", name: "Nom complet", email: "Adresse e-mail", phone: "Numéro de téléphone", password: "Mot de passe", submit: "Créer un compte", haveAccount: "Vous avez déjà un compte?", login: "Se connecter" },
@@ -195,14 +195,18 @@ const I18nContext = createContext<I18nContextType>({
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
+  const LANG_KEY = "passenger_lang";
+  const LEGACY_LANG_KEY = "wataxi_lang";
+
   const [lang, setLangState] = useState<Lang>(() => {
-    const saved = localStorage.getItem("wataxi_lang") as Lang;
+    const saved = (localStorage.getItem(LANG_KEY) || localStorage.getItem(LEGACY_LANG_KEY)) as Lang;
     return saved && ["es", "en", "fr"].includes(saved) ? saved : "es";
   });
 
   const setLang = (newLang: Lang) => {
     setLangState(newLang);
-    localStorage.setItem("wataxi_lang", newLang);
+    localStorage.setItem(LANG_KEY, newLang);
+    localStorage.removeItem(LEGACY_LANG_KEY);
   };
 
   useEffect(() => {

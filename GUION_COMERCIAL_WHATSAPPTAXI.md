@@ -123,14 +123,14 @@
 
 ### 🎬 ESCENA 8 — CALL TO ACTION (0:55 – 1:00)
 **Duración:** 5 segundos
-**Visual:** Fondo verde oscuro. Logo WhatsApp Taxi centrado. URL del sitio aparece: *whatsapptaxi-jkudqcvs.manus.space*. Botón animado: "Pide tu taxi ahora →". Efecto de confeti verde sutil.
+**Visual:** Fondo verde oscuro. Logo WhatsApp Taxi centrado. URL del sitio aparece: *passenger.com*. Botón animado: "Pide tu taxi ahora →". Efecto de confeti verde sutil.
 
 **VOZ EN OFF:**
 > *"WhatsApp Taxi. Descárgalo gratis hoy."*
 
 **Texto en pantalla:**
 - `WhatsApp Taxi` (logo grande)
-- `whatsapptaxi-jkudqcvs.manus.space`
+- `passenger.com`
 - `[ Pide tu taxi ahora → ]` (botón verde animado con pulse)
 
 ---
@@ -181,5 +181,5 @@
 
 ---
 
-*Guión creado para WhatsApp Taxi SaaS — whatsapptaxi-jkudqcvs.manus.space*
+*Guión creado para WhatsApp Taxi SaaS — passenger.com*
 *Versión 1.0 — Agosto 2026*

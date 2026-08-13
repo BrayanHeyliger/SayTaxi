@@ -33,11 +33,13 @@ export default function FAQEditor() {
   const [newItem, setNewItem] = useState<Omit<FAQItem, "id">>({ category: DEFAULT_CATEGORIES[0], q: "", a: "" });
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [saved, setSaved] = useState(false);
+  const CONFIG_KEY = "passenger_site_config";
+  const LEGACY_CONFIG_KEY = "wataxi_config";
 
   // Load from localStorage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("wataxi_config");
+      const stored = localStorage.getItem(CONFIG_KEY) || localStorage.getItem(LEGACY_CONFIG_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed.customFAQs && Array.isArray(parsed.customFAQs) && parsed.customFAQs.length > 0) {
@@ -49,10 +51,11 @@ export default function FAQEditor() {
 
   const handleSave = () => {
     try {
-      const stored = localStorage.getItem("wataxi_config");
+      const stored = localStorage.getItem(CONFIG_KEY) || localStorage.getItem(LEGACY_CONFIG_KEY);
       const config = stored ? JSON.parse(stored) : {};
       config.customFAQs = faqs;
-      localStorage.setItem("wataxi_config", JSON.stringify(config));
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+      localStorage.removeItem(LEGACY_CONFIG_KEY);
       setSaved(true);
       toast.success("FAQ guardado correctamente");
       setTimeout(() => setSaved(false), 3000);

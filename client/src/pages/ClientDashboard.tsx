@@ -5,9 +5,10 @@ import { Card } from "@/components/ui/card";
 import {
   Phone, Star, Clock, DollarSign, LogOut, CheckCircle, Bell,
   Car, X, ChevronRight, AlertTriangle, Share2, Tag, Calendar,
-  History, Home, Briefcase, MessageCircle, MapPin, Navigation, Gift
+  History, Home, Briefcase, MessageCircle, MapPin, Navigation, Gift, Camera, Moon, Sun
 } from "lucide-react";
 import { useLocalAuth } from "@/contexts/LocalAuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import LeafletMap, { type LeafletMapRef } from "@/components/LeafletMap";
 import NominatimAutocomplete from "@/components/NominatimAutocomplete";
@@ -21,6 +22,7 @@ import { ParcelHistory } from "@/components/ParcelHistory";
 import { calculateParcelPricing, normalizeParcelOrder } from "@/lib/parcelUtils";
 import { trpc } from "@/lib/trpc";
 import PassengerMascot from "@/components/PassengerMascot";
+import SafetyTipsButton from "@/components/SafetyTipsButton";
 
 type TripStatus = "idle" | "searching" | "accepted" | "in_progress" | "completed" | "rating";
 type ActivePanel = "request" | "history" | "scheduled" | "promo" | "referrals" | "parcels";
@@ -80,7 +82,8 @@ const MARKET_SLIDES: MarketSlide[] = [
 ];
 
 export default function ClientDashboard() {
-  const { user, isAuthenticated, logout } = useLocalAuth();
+  const { user, isAuthenticated, updateUser, logout } = useLocalAuth();
+  const { theme, toggleTheme } = useTheme();
   const [, navigate] = useLocation();
   const { permission: notifPermission, requestPermission, sendNotification } = usePushNotifications();
   const { notifications: persistedNotifs, unreadCount, addNotification: addPersistedNotif, markAllRead, clearAll: clearAllNotifs } = useNotificationHistory(user?.role || "client");
@@ -135,6 +138,10 @@ export default function ClientDashboard() {
   const driverAnimRef = useRef<number | null>(null);
   const [driverEta, setDriverEta] = useState<string | null>(null);
   const [driverDistance, setDriverDistance] = useState<string | null>(null);
+  const showMobileRequestDock = tripStatus === "idle" && activePanel === "request" && !chatOpen;
+  const hasActiveTrip = Boolean(currentTrip && (tripStatus === "accepted" || tripStatus === "in_progress"));
+  const showFloatingHelpers = !chatOpen && !hasActiveTrip;
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
 
   // LeafletMap handles vehicle spawning internally
   const clearVehicleMarkers = useCallback(() => {
@@ -308,21 +315,50 @@ export default function ClientDashboard() {
     }, 7000);
   }, [currentTrip?.driver?.name, currentTrip?.id]);
 
+  // Restaurar viaje ya solicitado en el marketplace (/buscar-conductor) o en el hero
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    try {
+      const trips = JSON.parse(localStorage.getItem(TRIPS_KEY) || "[]");
+      const mine = trips.find((t: any) => t.clientId === user?.id && (t.status === "requested" || t.status === "accepted" || t.status === "in_progress"));
+      if (!mine) return;
+      setCurrentTrip(mine);
+      setPickupLocation(mine.pickup || pickupLocation);
+      setDropoffLocation(mine.dropoff || dropoffLocation);
+      if (mine.status === "requested") {
+        setTripStatus("searching");
+      } else if (mine.status === "accepted") {
+        setTripStatus("accepted");
+        if (pickupCoords) startDriverApproach(pickupCoords);
+        else startDriverApproach({ lat: 19.4326, lng: -99.1332 });
+      } else if (mine.status === "in_progress") {
+        setTripStatus("in_progress");
+      }
+    } catch {}
+  }, [isAuthenticated]);
+
   const handleMapReady = useCallback((ref: LeafletMapRef) => {
     mapRef.current = ref;
-    navigator.geolocation?.getCurrentPosition(async (pos) => {
-      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setPickupCoords(coords);
-      // Build a ~30km bounding box around the user's GPS position for destination search bias
-      const delta = 0.27; // ~30km
-      setUserViewbox([coords.lng - delta, coords.lat - delta, coords.lng + delta, coords.lat + delta]);
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`, { headers: { "Accept-Language": "es" } });
-        const data = await res.json();
-        if (data.display_name) setPickupLocation(data.display_name.split(",").slice(0, 2).join(","));
-        if (data.address?.country_code) setUserCountryCode(data.address.country_code);
-      } catch {}
-    });
+    if (!navigator.geolocation || !navigator.permissions) return;
+    navigator.permissions
+      .query({ name: "geolocation" })
+      .then((permission) => {
+        if (permission.state !== "granted") return;
+        navigator.geolocation?.getCurrentPosition(async (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setPickupCoords(coords);
+          // Build a ~30km bounding box around the user's GPS position for destination search bias
+          const delta = 0.27; // ~30km
+          setUserViewbox([coords.lng - delta, coords.lat - delta, coords.lng + delta, coords.lat + delta]);
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`, { headers: { "Accept-Language": "es" } });
+            const data = await res.json();
+            if (data.display_name) setPickupLocation(data.display_name.split(",").slice(0, 2).join(","));
+            if (data.address?.country_code) setUserCountryCode(data.address.country_code);
+          } catch {}
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const handlePickupSelect = (address: string, lat: number, lng: number) => {
@@ -467,6 +503,7 @@ export default function ClientDashboard() {
       : tripStatus === "in_progress"
       ? { mood: "happy" as const, text: "Todo va bien. Disfruta tu viaje." }
       : { mood: "idle" as const, text: "Listo para ayudarte en tu proximo viaje." };
+  const firstName = (user?.name || "Cliente").split(" ")[0];
 
   useEffect(() => {
     if (tripStatus !== "idle" || activePanel !== "request") return;
@@ -476,43 +513,92 @@ export default function ClientDashboard() {
     return () => window.clearInterval(interval);
   }, [activePanel, tripStatus]);
 
+  const handleProfilePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecciona una imagen válida");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("La imagen debe pesar menos de 2 MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const nextPhotoUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!nextPhotoUrl) return;
+      updateUser({ photoUrl: nextPhotoUrl });
+      toast.success("Foto de perfil actualizada");
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
   if (!isAuthenticated) return null;
 
   return (
-    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+    <div className="wt-panel h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="wt-header bg-white shadow-sm border-b border-slate-200 flex-shrink-0 relative">
+      <header className="wt-header bg-white/80 backdrop-blur-xl shadow-sm border-b border-slate-200/80 flex-shrink-0 relative dark:bg-[#0f172a]/80 dark:border-emerald-500/15">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-sm">{user?.name?.[0] || "C"}</div>
+            <button
+              type="button"
+              onClick={() => profilePhotoInputRef.current?.click()}
+              className="relative w-11 h-11 rounded-full overflow-hidden bg-gradient-to-br from-emerald-400 to-[#0f172a] flex items-center justify-center text-white font-bold text-base ring-2 ring-white/60 dark:ring-emerald-500/40"
+              title="Cambiar foto de perfil"
+            >
+              {user?.photoUrl ? (
+                <img src={user.photoUrl} alt="Foto de perfil" className="h-full w-full object-cover" />
+              ) : (
+                <span>{user?.name?.[0] || "C"}</span>
+              )}
+              <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white p-0.5 text-slate-600 shadow-sm dark:bg-[#0f172a] dark:text-slate-300">
+                <Camera size={10} />
+              </span>
+            </button>
+            <input
+              ref={profilePhotoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleProfilePhotoChange}
+            />
             <div>
-              <p className="font-semibold text-slate-900 text-sm">{user?.name}</p>
-              <p className={`text-xs font-medium ${loyaltyLevel.color}`}>⭐ {loyaltyLevel.name} · {loyaltyPoints} pts</p>
+              <p className="font-semibold text-slate-900 text-[2.35rem] leading-[0.95] tracking-[-0.04em] dark:text-slate-100">{firstName}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Panel de Cliente</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {toggleTheme && (
+              <button onClick={toggleTheme} title={theme === "dark" ? "Modo claro" : "Modo oscuro"} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100/80 text-slate-700 transition hover:bg-slate-200/80 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10">
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+            )}
             <div className="relative">
-              <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) markAllRead(); }} className="relative p-2 rounded-lg hover:bg-slate-100">
-                <Bell size={20} className="text-slate-600" />
-                {unreadCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+              <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) markAllRead(); }} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-100/80 text-slate-600 transition hover:bg-slate-200/80 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10">
+                <Bell size={18} />
+                {unreadCount > 0 && <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">{unreadCount > 9 ? "9+" : unreadCount}</span>}
               </button>
               {showNotifications && (
-                <div className="wt-notification-panel absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl">
-                  <div className="p-3 border-b border-slate-200 flex justify-between items-center">
+                <div className="wt-notification-panel absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl dark:bg-[#0f172a] dark:border-white/10">
+                  <div className="p-3 border-b border-slate-200 flex justify-between items-center dark:border-white/10">
                     <div>
-                      <h3 className="font-semibold text-slate-900 text-sm">Notificaciones</h3>
+                      <h3 className="font-semibold text-slate-900 text-sm dark:text-slate-100">Notificaciones</h3>
                       <p className="text-xs text-slate-400">Últimas 24 horas</p>
                     </div>
-                    <button onClick={clearAllNotifs} className="text-xs text-slate-500 hover:text-red-500 transition-colors">Limpiar</button>
+                    <button onClick={clearAllNotifs} className="text-xs text-slate-500 hover:text-red-500 transition-colors dark:text-slate-400">Limpiar</button>
                   </div>
                   <div className="max-h-72 overflow-y-auto">
                     {persistedNotifs.length === 0
-                      ? <div className="p-6 text-center"><Bell size={28} className="mx-auto text-slate-200 mb-2" /><p className="text-sm text-slate-400">Sin notificaciones</p></div>
+                      ? <div className="p-6 text-center"><Bell size={28} className="mx-auto text-slate-200 mb-2 dark:text-slate-700" /><p className="text-sm text-slate-400">Sin notificaciones</p></div>
                       : persistedNotifs.map(n => (
-                        <div key={n.id} className={`p-3 border-b border-slate-100 flex gap-3 items-start ${!n.read ? "bg-green-50/60" : ""}`}>
+                        <div key={n.id} className={`p-3 border-b border-slate-100 flex gap-3 items-start dark:border-white/5 ${!n.read ? "bg-green-50/60 dark:bg-green-500/10" : ""}`}>
                           <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.type === "success" ? "bg-green-500" : n.type === "warning" ? "bg-yellow-500" : n.type === "error" ? "bg-red-500" : "bg-blue-500"}`} />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-slate-800 leading-snug">{n.message}</p>
+                            <p className="text-sm text-slate-800 leading-snug dark:text-slate-200">{n.message}</p>
                             <p className="text-xs text-slate-400 mt-0.5">{new Date(n.timestamp).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</p>
                           </div>
                           {!n.read && <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0 mt-1.5" />}
@@ -520,7 +606,7 @@ export default function ClientDashboard() {
                       ))
                     }
                   </div>
-                  <div className="p-2 border-t border-slate-100 text-center">
+                  <div className="p-2 border-t border-slate-100 text-center dark:border-white/5">
                     <p className="text-xs text-slate-400">Se reinicia automáticamente cada 24 h</p>
                   </div>
                 </div>
@@ -528,11 +614,27 @@ export default function ClientDashboard() {
             </div>
             {/* Botón activar notificaciones push */}
             {notifPermission !== "granted" && (
-              <button onClick={requestPermission} title="Activar notificaciones" className="p-2 rounded-lg hover:bg-green-50 text-green-600 border border-green-200 text-xs flex items-center gap-1">
-                <Bell size={14} /> Push
+              <button onClick={requestPermission} title="Activar notificaciones" className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600 border border-green-200 dark:bg-green-500/10 dark:border-green-500/30 dark:text-green-400">
+                <Bell size={16} />
               </button>
             )}
-            <Button variant="outline" size="sm" onClick={() => { logout(); navigate("/"); }} className="gap-1.5 text-xs"><LogOut size={14} /> Salir</Button>
+            <Button variant="outline" size="icon" onClick={() => { logout(); navigate("/"); }} className="rounded-full dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10" title="Salir">
+              <LogOut size={16} />
+            </Button>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 pb-3 flex items-center">
+          <div className="flex-1 text-center">
+            <p className={`text-sm font-semibold ${hasActiveTrip ? "text-emerald-600 dark:text-emerald-400" : "text-slate-700 dark:text-slate-300"}`}>{hasActiveTrip ? "En ruta" : "Disponible"}</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Estado</p>
+          </div>
+          <div className="flex-1 text-center border-l border-slate-200/80 dark:border-white/10">
+            <p className={`text-sm font-semibold ${loyaltyLevel.color}`}>{loyaltyLevel.name}</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Nivel</p>
+          </div>
+          <div className="flex-1 text-center border-l border-slate-200/80 dark:border-white/10">
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loyaltyPoints}</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Puntos</p>
           </div>
         </div>
       </header>
@@ -544,7 +646,7 @@ export default function ClientDashboard() {
           <button onClick={() => setPendingTripBanner(null)} className="ml-3 text-white/80 hover:text-white">✕</button>
         </div>
       )}
-      <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3">
+      <div className="hidden lg:flex bg-white/70 backdrop-blur-sm border-b border-slate-200 px-4 py-2.5 items-center gap-3">
         <PassengerMascot mood={mascotState.mood} size="sm" animated className="shrink-0" />
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-700 font-semibold">Asistente Passenger</p>
@@ -552,16 +654,16 @@ export default function ClientDashboard() {
         </div>
       </div>
       {/* Main content — fills remaining height */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0" style={{ height: 'calc(100vh - 65px)' }}>
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
 
         {/* MAPA — altura explícita garantizada */}
-        <div className="relative lg:flex-1" style={{ height: '56vw', minHeight: '260px', maxHeight: '420px' }}>
+        <div className="hidden lg:block relative lg:flex-1 px-3 pt-3 lg:p-0" style={{ height: '58vw', minHeight: '280px', maxHeight: '440px' }}>
           {/* En desktop, ocupa todo el espacio restante */}
           <style>{`@media (min-width: 1024px) { .map-container { height: 100% !important; max-height: none !important; } }`}</style>
           <LeafletMap
             height="100%"
             onMapReady={handleMapReady}
-            className="map-container absolute inset-0 w-full h-full"
+            className="map-container absolute inset-3 lg:inset-0 w-[calc(100%-24px)] lg:w-full h-[calc(100%-12px)] lg:h-full rounded-3xl lg:rounded-none overflow-hidden border border-slate-200"
           />
           {/* Chat flotante — visible cuando hay viaje activo */}
           {(tripStatus === "accepted" || tripStatus === "in_progress") && currentTrip && (
@@ -572,6 +674,9 @@ export default function ClientDashboard() {
               userName={user?.name || "Cliente"}
               role="client"
               otherPartyName={currentTrip.driver?.name || "Conductor"}
+              showLauncher={false}
+              fullScreen
+              enableBackClose
               forceOpen={chatOpen}
               onOpenChange={setChatOpen}
             />
@@ -579,13 +684,13 @@ export default function ClientDashboard() {
           )}
           {/* Status overlay en el mapa */}
           {tripStatus === "searching" && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white rounded-full px-4 py-2 shadow-lg flex items-center gap-2 z-10">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/70 backdrop-blur-xl rounded-full px-4 py-2 shadow-lg flex items-center gap-2 z-10 dark:bg-[#0f172a]/70">
               <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-sm font-medium text-slate-900">Buscando conductor...</span>
+              <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Buscando conductor...</span>
             </div>
           )}
           {tripStatus === "searching" && (
-            <div className="absolute left-4 bottom-4 z-10 rounded-2xl border border-emerald-200 bg-white/95 p-3 shadow-lg">
+            <div className="absolute left-4 bottom-4 z-10 rounded-2xl border border-emerald-200 bg-white/70 backdrop-blur-xl p-3 shadow-lg dark:border-emerald-500/30 dark:bg-[#0f172a]/70">
               <div className="flex items-center gap-2">
                 <PassengerMascot mood="searching" size="sm" animated />
                 <p className="text-xs font-medium text-emerald-800">Estoy revisando opciones para ti</p>
@@ -601,22 +706,20 @@ export default function ClientDashboard() {
         </div>
 
         {/* Panel lateral derecho */}
-        <div className="w-full lg:w-[400px] bg-white shadow-xl flex flex-col flex-shrink-0" style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '100%' }}>
+        <div className="w-full lg:w-[420px] bg-white/70 backdrop-blur-xl shadow-2xl flex flex-col flex-shrink-0 border-l border-slate-200/70 dark:bg-[#0f172a]/70" style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '100%' }}>
 
           {/* Tabs — solo en idle */}
           {tripStatus === "idle" && (
-            <div className="flex border-b border-slate-200 flex-shrink-0">
+            <div className="flex gap-2 overflow-x-auto border-b border-slate-200 px-3 py-2.5 flex-shrink-0 bg-white/80">
               {[
-                { id: "request" as ActivePanel, label: "Viaje", icon: Car },
-                { id: "parcels" as ActivePanel, label: "Paquetes", icon: Briefcase },
-                { id: "scheduled" as ActivePanel, label: "Programar", icon: Calendar },
-                { id: "history" as ActivePanel, label: "Historial", icon: History },
-                { id: "promo" as ActivePanel, label: "Promos", icon: Tag },
-                { id: "referrals" as ActivePanel, label: "Referidos", icon: Gift },
+                { id: "request" as ActivePanel, label: "Viaje" },
+                { id: "parcels" as ActivePanel, label: "Paquetes" },
+                { id: "history" as ActivePanel, label: "Historial" },
+                { id: "promo" as ActivePanel, label: "Promos" },
+                { id: "referrals" as ActivePanel, label: "Perfil" },
               ].map(tab => (
                 <button key={tab.id} onClick={() => setActivePanel(tab.id)}
-                  className={`flex-1 flex flex-col items-center py-2.5 text-xs font-medium transition-colors ${activePanel === tab.id ? "text-green-600 border-b-2 border-green-500" : "text-slate-500 hover:text-slate-700"}`}>
-                  <tab.icon size={16} className="mb-0.5" />
+                  className={`whitespace-nowrap rounded-[12px] border px-4 py-2 text-xs font-semibold transition-colors ${activePanel === tab.id ? "border-blue-200 bg-blue-50 text-slate-900" : "border-transparent bg-transparent text-slate-500 hover:bg-slate-100"}`}>
                   {tab.label}
                 </button>
               ))}
@@ -624,7 +727,7 @@ export default function ClientDashboard() {
           )}
 
           {/* Contenido scrollable */}
-          <div className="flex-1 overflow-y-auto pb-24 lg:pb-0">
+          <div className="flex-1 overflow-y-auto pb-28 lg:pb-6">
 
             {/* SOLICITAR VIAJE */}
             {/* Broadcast Announcements */}
@@ -634,87 +737,24 @@ export default function ClientDashboard() {
 
             {/* SOLICITAR VIAJE */}
             {tripStatus === "idle" && activePanel === "request" && (
-              <div className="p-4 flex flex-col gap-3">
-                <div className="overflow-hidden rounded-3xl border border-slate-900/10 bg-slate-950 text-white shadow-xl">
-                  <div className="flex items-center justify-between px-4 pt-4 text-[11px] uppercase tracking-[0.35em] text-emerald-200">
-                    <span>Passenger Live</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setMarketSlideIndex((current) => (current - 1 + MARKET_SLIDES.length) % MARKET_SLIDES.length)}
-                        className="rounded-full border border-white/15 bg-white/10 p-1 text-white/80 hover:bg-white/20"
-                        aria-label="Slide anterior"
-                      >
-                        <ChevronRight size={14} className="rotate-180" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMarketSlideIndex((current) => (current + 1) % MARKET_SLIDES.length)}
-                        className="rounded-full border border-white/15 bg-white/10 p-1 text-white/80 hover:bg-white/20"
-                        aria-label="Slide siguiente"
-                      >
-                        <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="relative px-4 pb-4 pt-3">
-                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                      <div
-                        className="flex transition-transform duration-700 ease-out"
-                        style={{ width: `${MARKET_SLIDES.length * 100}%`, transform: `translateX(-${marketSlideIndex * (100 / MARKET_SLIDES.length)}%)` }}
-                      >
-                        {MARKET_SLIDES.map((slide) => (
-                          <div key={slide.title} className="w-full shrink-0 p-4" style={{ width: `${100 / MARKET_SLIDES.length}%` }}>
-                            <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${slide.gradient} p-4 shadow-lg`}>
-                              <div className="absolute inset-0 opacity-25" style={{ background: `radial-gradient(circle at top right, ${slide.accent}, transparent 42%)` }} />
-                              <div className="relative flex items-start justify-between gap-3">
-                                <div className="max-w-[72%]">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/85">{slide.eyebrow}</p>
-                                  <h3 className="mt-2 text-xl font-black leading-tight text-white">{slide.title}</h3>
-                                  <p className="mt-2 text-sm leading-5 text-white/88">{slide.copy}</p>
-                                </div>
-                                <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-right backdrop-blur-sm">
-                                  <p className="text-[10px] uppercase tracking-[0.25em] text-white/70">Live</p>
-                                  <p className="text-lg font-black text-white">App</p>
-                                </div>
-                              </div>
-                              <div className="relative mt-4 grid grid-cols-3 gap-2">
-                                {slide.stats.map((stat) => (
-                                  <div key={stat.label} className="rounded-xl border border-white/10 bg-white/10 px-2 py-2 backdrop-blur-sm">
-                                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/65">{stat.label}</p>
-                                    <p className="mt-1 text-xs font-bold text-white">{stat.value}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between px-4 pb-4">
-                    <div className="flex items-center gap-1.5">
-                      {MARKET_SLIDES.map((slide, index) => (
-                        <button
-                          key={slide.title}
-                          type="button"
-                          onClick={() => setMarketSlideIndex(index)}
-                          className={`h-1.5 rounded-full transition-all ${marketSlideIndex === index ? "w-8 bg-white" : "w-3 bg-white/35 hover:bg-white/50"}`}
-                          aria-label={`Ir al slide ${index + 1}`}
-                        />
-                      ))}
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => setActivePanel("request")}
-                      className="h-8 rounded-full bg-white px-3 text-xs font-semibold text-slate-950 hover:bg-emerald-50"
-                    >
-                      Pedir viaje
-                    </Button>
-                  </div>
+              <div className="p-4 flex-col gap-3 flex">
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">¿A dónde vamos?</h2>
+                <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel("scheduled")}
+                    className="whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    Programar viaje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel("referrals")}
+                    className="whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Beneficios y perfil
+                  </button>
                 </div>
-
-                <h2 className="text-lg font-bold text-slate-900">¿A dónde vamos?</h2>
 
                 {/* Lugares guardados */}
                 <div className="flex gap-2">
@@ -800,7 +840,7 @@ export default function ClientDashboard() {
                   <label className="text-sm font-medium text-slate-700">Modo Puja (proponer precio)</label>
                   <button onClick={() => setShowBidMode(!showBidMode)}
                     className={`relative w-10 h-5 rounded-full transition-colors ${showBidMode ? "bg-green-500" : "bg-slate-300"}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${showBidMode ? "translate-x-5" : "translate-x-0.5"}`} />
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform dark:bg-white ${showBidMode ? "translate-x-5" : "translate-x-0.5"}`} />
                   </button>
                 </div>
                 {showBidMode && (
@@ -866,6 +906,15 @@ export default function ClientDashboard() {
                  </div>
                )}
 
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={() => handleRequestTrip()}
+                  className="mt-2 w-full rounded-xl border border-green-300/45 bg-[linear-gradient(145deg,rgba(5,150,105,0.9),rgba(6,120,88,0.95))] h-12 py-3 text-lg font-bold tracking-[0.01em] text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.75)] shadow-[0_14px_28px_-20px_rgba(5,150,105,0.95)] transition-all hover:border-green-200/70 hover:bg-[linear-gradient(145deg,rgba(4,134,95,0.95),rgba(5,105,76,0.98))]"
+                >
+                  <Navigation size={18} className="mr-2 inline" /> Pedir viaje
+                </Button>
+
                 {/* Lealtad */}
                 <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-3 border border-purple-200">
                   <div className="flex justify-between items-center mb-1">
@@ -877,13 +926,137 @@ export default function ClientDashboard() {
                   </div>
                   <p className="text-xs text-purple-600 mt-1">{loyaltyPoints} / {loyaltyLevel.next} pts</p>
                 </div>
+
+              {/* Slide marketplace — va debajo del formulario de pedir viaje */}
+              <div className="overflow-hidden rounded-3xl border border-slate-900/10 bg-slate-950 text-white shadow-xl">
+                <div className="flex items-center justify-between px-4 pt-4 text-[11px] uppercase tracking-[0.35em] text-emerald-200">
+                  <span>Passenger Live</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setMarketSlideIndex((current) => (current - 1 + MARKET_SLIDES.length) % MARKET_SLIDES.length)}
+                      className="rounded-full border border-white/15 bg-white/10 p-1 text-white/80 hover:bg-white/20"
+                      aria-label="Slide anterior"
+                    >
+                      <ChevronRight size={14} className="rotate-180" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMarketSlideIndex((current) => (current + 1) % MARKET_SLIDES.length)}
+                      className="rounded-full border border-white/15 bg-white/10 p-1 text-white/80 hover:bg-white/20"
+                      aria-label="Slide siguiente"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="relative px-4 pb-4 pt-3">
+                  <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                    <div
+                      className="flex transition-transform duration-700 ease-out"
+                      style={{ width: `${MARKET_SLIDES.length * 100}%`, transform: `translateX(-${marketSlideIndex * (100 / MARKET_SLIDES.length)}%)` }}
+                    >
+                      {MARKET_SLIDES.map((slide) => (
+                        <div key={slide.title} className="w-full shrink-0 p-4" style={{ width: `${100 / MARKET_SLIDES.length}%` }}>
+                          <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${slide.gradient} p-4 shadow-lg`}>
+                            <div className="absolute inset-0 opacity-25" style={{ background: `radial-gradient(circle at top right, ${slide.accent}, transparent 42%)` }} />
+                            <div className="relative flex items-start justify-between gap-3">
+                              <div className="max-w-[72%]">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/85">{slide.eyebrow}</p>
+                                <h3 className="mt-2 text-xl font-black leading-tight text-white">{slide.title}</h3>
+                                <p className="mt-2 text-sm leading-5 text-white/88">{slide.copy}</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-right backdrop-blur-sm">
+                                <p className="text-[10px] uppercase tracking-[0.25em] text-white/70">Live</p>
+                                <p className="text-lg font-black text-white">App</p>
+                              </div>
+                            </div>
+                            <div className="relative mt-4 grid grid-cols-3 gap-2">
+                              {slide.stats.map((stat) => (
+                                <div key={stat.label} className="rounded-xl border border-white/10 bg-white/10 px-2 py-2 backdrop-blur-sm">
+                                  <p className="text-[10px] uppercase tracking-[0.2em] text-white/65">{stat.label}</p>
+                                  <p className="mt-1 text-xs font-bold text-white">{stat.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between px-4 pb-4">
+                  <div className="flex items-center gap-1.5">
+                    {MARKET_SLIDES.map((slide, index) => (
+                      <button
+                        key={slide.title}
+                        type="button"
+                        onClick={() => setMarketSlideIndex(index)}
+                        className={`h-1.5 rounded-full transition-all ${marketSlideIndex === index ? "w-8 bg-white" : "w-3 bg-white/35 hover:bg-white/50"}`}
+                        aria-label={`Ir al slide ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => handleRequestTrip()}
+                    className="h-8 rounded-full bg-white px-3 text-xs font-semibold text-slate-950 hover:bg-emerald-50"
+                  >
+                    Pedir viaje
+                  </Button>
+                </div>
+              </div>
+              </div>
+            )}
+
+            {((tripStatus === "idle" && activePanel === "request") || tripStatus === "accepted" || tripStatus === "in_progress") && (
+              <div className="lg:hidden px-4 pb-4">
+                {tripStatus === "idle" ? (
+                <article className="rounded-3xl bg-gradient-to-br from-[oklch(0.18_0.05_165)] to-[oklch(0.12_0.035_170)] p-4 text-white shadow-xl ring-1 ring-emerald-300/20">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-white/60">Passenger Premium</p>
+                  <h2 className="mt-2 text-[2.6rem] leading-[0.92] tracking-[-0.04em] font-semibold">Conductor en camino</h2>
+                  <p className="mt-2 text-sm text-white/75">Seguimiento en vivo con experiencia limpia y control total.</p>
+                </article>
+                ) : (
+                <div className="flex items-center justify-between rounded-3xl border border-green-300/45 bg-[linear-gradient(145deg,rgba(5,150,105,0.9),rgba(6,120,88,0.95))] p-4 text-white shadow-[0_14px_28px_-20px_rgba(5,150,105,0.95)]">
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-white/70">{tripStatus === "accepted" ? "Conductor en camino" : "Viaje en progreso"}</p>
+                    <p className="mt-1 truncate text-lg font-bold leading-tight">{currentTrip?.driver?.name} · {currentTrip?.driver?.vehicle}</p>
+                  </div>
+                  <div className="ml-3 text-right">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/70">ETA</p>
+                    <p className="text-lg font-black">{driverEta || currentTrip?.estimatedTime || "--"}</p>
+                  </div>
+                </div>
+                )}
+                <article className="mt-3 overflow-hidden rounded-3xl border border-emerald-200/60 bg-white/70 shadow-lg backdrop-blur-xl dark:border-emerald-400/20 dark:bg-[#0f172a]/60">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-white/10">
+                    <h3 className="text-[3rem] leading-[0.9] tracking-[-0.04em] font-semibold text-slate-900 dark:text-slate-100">Mapa</h3>
+                    <span className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-sm font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300">ETA {driverEta || "4 min"}</span>
+                  </div>
+                  <div className="relative h-[320px]">
+                    <LeafletMap
+                      height="100%"
+                      onMapReady={handleMapReady}
+                      className="absolute inset-0 h-full w-full"
+                    />
+                    <div className="absolute bottom-3 left-3 rounded-xl bg-[oklch(0.16_0.04_165)]/80 px-3 py-2 text-xs text-white backdrop-blur-md ring-1 ring-emerald-300/25">
+                      Ruta: {pickupLocation || "Brickell Ave 1201"} → {dropoffLocation || "Miami Intl D"}
+                    </div>
+                    {(tripStatus === "accepted" || tripStatus === "in_progress") && currentTrip?.driver && (
+                      <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/40 bg-[oklch(0.14_0.04_170)]/80 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md">
+                        🚕 {currentTrip.driver.name} · ETA {driverEta || currentTrip.estimatedTime || "--"}
+                      </div>
+                    )}
+                  </div>
+                </article>
               </div>
             )}
 
             {/* PROGRAMAR VIAJE */}
             {tripStatus === "idle" && activePanel === "scheduled" && (
               <div className="p-4 flex flex-col gap-3">
-                <h2 className="text-lg font-bold text-slate-900">Programar Viaje</h2>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Programar Viaje</h2>
                 <div><label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
                   <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} min={new Date().toISOString().split("T")[0]}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" /></div>
@@ -902,7 +1075,7 @@ export default function ClientDashboard() {
             {/* HISTORIAL */}
             {tripStatus === "idle" && activePanel === "history" && (
               <div className="p-4 flex flex-col gap-3">
-                <h2 className="text-lg font-bold text-slate-900">Historial de Viajes</h2>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Historial de Viajes</h2>
                 {tripHistory.length === 0 ? (
                   <div className="text-center py-10"><History size={40} className="mx-auto text-slate-300 mb-3" /><p className="text-slate-500 text-sm">No hay viajes aún</p></div>
                 ) : tripHistory.map(trip => (
@@ -923,7 +1096,7 @@ export default function ClientDashboard() {
             {/* PROMOS */}
             {tripStatus === "idle" && activePanel === "promo" && (
               <div className="p-4 flex flex-col gap-3">
-                <h2 className="text-lg font-bold text-slate-900">Códigos Promocionales</h2>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Códigos Promocionales</h2>
                 <div className="flex gap-2">
                   <input type="text" placeholder="Ingresa tu código" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                     className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none uppercase" />
@@ -954,7 +1127,7 @@ export default function ClientDashboard() {
                     <Gift size={16} className="text-purple-600" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-slate-900">Programa de Referidos</h2>
+                    <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Programa de Referidos</h2>
                     <p className="text-xs text-slate-500">Invita amigos y gana recompensas</p>
                   </div>
                 </div>
@@ -976,7 +1149,7 @@ export default function ClientDashboard() {
                     <Briefcase size={16} className="text-blue-600" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-slate-900">Envío de Paquetes</h2>
+                    <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Envío de Paquetes</h2>
                     <p className="text-xs text-slate-500">Entrega rápida y segura en minutos</p>
                   </div>
                 </div>
@@ -1043,7 +1216,7 @@ export default function ClientDashboard() {
                     <Briefcase size={16} className="text-blue-600" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-slate-900">Historial de Paquetes</h2>
+                    <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Historial de Paquetes</h2>
                     <p className="text-xs text-slate-500">Tus entregas recientes</p>
                   </div>
                 </div>
@@ -1055,7 +1228,7 @@ export default function ClientDashboard() {
                 <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
                   <Car size={36} className="text-green-600 animate-bounce" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900">Buscando conductor...</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Buscando conductor...</h3>
                 <div className="bg-slate-50 rounded-xl p-4 w-full text-sm space-y-2">
                   <div className="flex justify-between"><span className="text-slate-500">Recogida</span><span className="font-medium text-slate-900 text-right max-w-[60%] truncate">{currentTrip?.pickup}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Destino</span><span className="font-medium text-slate-900 text-right max-w-[60%] truncate">{currentTrip?.dropoff}</span></div>
@@ -1068,15 +1241,15 @@ export default function ClientDashboard() {
             {/* CONDUCTOR ACEPTÓ */}
             {(tripStatus === "accepted" || tripStatus === "in_progress") && currentTrip?.driver && (
               <div className="p-4 flex flex-col gap-3">
-                <div className={`flex items-center gap-2 rounded-xl p-3 ${tripStatus === "accepted" ? "bg-green-50 border border-green-200" : "bg-blue-50 border border-blue-200"}`}>
-                  <CheckCircle size={18} className={tripStatus === "accepted" ? "text-green-600" : "text-blue-600"} />
-                  <p className={`text-sm font-semibold ${tripStatus === "accepted" ? "text-green-800" : "text-blue-800"}`}>
+                <div className={`flex items-center gap-2 rounded-xl p-3 text-white border ${tripStatus === "accepted" ? "border-green-300/45 bg-[linear-gradient(145deg,rgba(5,150,105,0.9),rgba(6,120,88,0.95))]" : "border-emerald-300/60 bg-[linear-gradient(145deg,rgba(4,134,95,0.95),rgba(5,105,76,0.98))]"}`}>
+                  <CheckCircle size={18} className="text-white" />
+                  <p className={`text-sm font-bold ${tripStatus === "accepted" ? "text-white" : "text-white"}`}>
                     {tripStatus === "accepted" ? "¡Conductor en camino!" : "Viaje en progreso"}
                   </p>
                 </div>
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                   <div className="p-4 bg-slate-50 flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-lg font-bold">{currentTrip.driver.name[0]}</div>
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-[oklch(0.35_0.14_160)] flex items-center justify-center text-white text-lg font-bold ring-2 ring-emerald-300/50">{currentTrip.driver.name[0]}</div>
                     <div className="flex-1">
                       <p className="font-bold text-slate-900">{currentTrip.driver.name}</p>
                       <p className="text-sm text-slate-500">{currentTrip.driver.vehicle}</p>
@@ -1098,8 +1271,8 @@ export default function ClientDashboard() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={handleMessageDriver} className="bg-green-600 hover:bg-green-700 text-white gap-2 text-sm"><MessageCircle size={15} /> Chat Seguro</Button>
-                  <Button onClick={handleSOS} variant="outline" className="gap-2 text-sm text-red-500 border-red-200"><AlertTriangle size={15} /> SOS</Button>
+                  <Button onClick={handleMessageDriver} className="gap-2 text-sm text-white border border-green-300/45 bg-[linear-gradient(145deg,rgba(5,150,105,0.9),rgba(6,120,88,0.95))] shadow-[0_10px_22px_-14px_rgba(5,150,105,0.95)] hover:border-green-200/70 hover:bg-[linear-gradient(145deg,rgba(4,134,95,0.95),rgba(5,105,76,0.98))]"><MessageCircle size={15} /> Chat Seguro</Button>
+                  <Button onClick={handleSOS} variant="outline" className="gap-2 text-sm text-red-500 border-red-300 bg-red-50/60 hover:bg-red-100"><AlertTriangle size={15} /> SOS</Button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <Button variant="outline" size="sm" onClick={handleShareTrip} className="gap-1 text-xs"><Share2 size={12} /> Compartir</Button>
@@ -1107,7 +1280,7 @@ export default function ClientDashboard() {
                   <Button variant="outline" size="sm" onClick={handleCancelTrip} className="gap-1 text-xs text-slate-500"><X size={12} /> Cancelar</Button>
                 </div>
                 {tripStatus === "in_progress" && (
-                  <Button onClick={() => setTripStatus("rating")} className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                  <Button onClick={() => setTripStatus("rating")} className="w-full gap-2 text-white border border-green-300/45 bg-[linear-gradient(145deg,rgba(5,150,105,0.9),rgba(6,120,88,0.95))] shadow-[0_14px_28px_-20px_rgba(5,150,105,0.95)] hover:border-green-200/70 hover:bg-[linear-gradient(145deg,rgba(4,134,95,0.95),rgba(5,105,76,0.98))]">
                     <CheckCircle size={16} /> Finalizar Viaje
                   </Button>
                 )}
@@ -1117,7 +1290,7 @@ export default function ClientDashboard() {
             {/* CALIFICACIÓN */}
             {tripStatus === "rating" && (
               <div className="p-5 flex flex-col gap-4">
-                <h2 className="text-xl font-bold text-slate-900">Califica tu viaje</h2>
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Califica tu viaje</h2>
                 <p className="text-sm text-slate-500">¿Cómo fue tu experiencia con {currentTrip?.driver?.name}?</p>
                 <div className="flex justify-center gap-3 py-2">
                   {[1,2,3,4,5].map(s => (
@@ -1139,17 +1312,56 @@ export default function ClientDashboard() {
           </div>
         </div>
       </div>
-      {/* Botón fijo en la parte inferior — solo visible en móvil cuando el panel de solicitud está activo */}
-      {tripStatus === "idle" && activePanel === "request" && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 p-4 shadow-2xl">
-          <Button onClick={handleRequestTrip} className="w-full py-4 font-bold text-base rounded-xl shadow-lg"
-            style={{ background: "oklch(0.76 0.18 148)", color: "oklch(0.08 0.02 148)" }}>
-            {showBidMode ? "Enviar Oferta" : "🚕 Solicitar Viaje"} <ChevronRight size={18} className="ml-1" />
-          </Button>
+      {/* Footer persistente estilo app */}
+      <div className="lg:hidden border-t border-emerald-300/20 bg-[oklch(0.14_0.04_170)]/92 px-4 py-3 shadow-[0_-16px_40px_rgba(5,150,105,0.28)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3">
+          <div className="flex items-center justify-between rounded-2xl border border-emerald-300/25 bg-[oklch(0.2_0.05_165)]/60 px-4 py-3 text-white shadow-sm backdrop-blur-xl">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">{hasActiveTrip ? "En ruta a recogida" : "Listo para viajar"}</p>
+              <p className="truncate text-sm font-semibold leading-tight">{hasActiveTrip ? `${currentTrip?.pickup} → ${currentTrip?.dropoff}` : "Define origen y destino para solicitar"}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/45">ETA</p>
+              <p className="flex items-center justify-end gap-1 text-sm font-semibold text-emerald-300">
+                <Clock size={13} /> {hasActiveTrip ? (driverEta || currentTrip?.estimatedTime || "--") : "--"}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              onClick={() => {
+                if (!hasActiveTrip) {
+                  if (showMobileRequestDock) handleRequestTrip();
+                  else toast.info("Completa el viaje para solicitar");
+                  return;
+                }
+                handleGetMyLocation();
+              }}
+              className="h-14 gap-1 rounded-2xl border border-emerald-300/45 bg-[linear-gradient(145deg,rgba(5,150,105,0.9),rgba(6,120,88,0.95))] px-2 text-xs font-semibold text-white shadow-[0_10px_22px_-14px_rgba(5,150,105,0.95)] hover:border-emerald-200/70 hover:bg-[linear-gradient(145deg,rgba(4,134,95,0.95),rgba(5,105,76,0.98))]"
+            >
+              <Navigation size={16} /> GPS
+            </Button>
+            <Button
+              onClick={() => {
+                if (!hasActiveTrip) { toast.info("No hay viaje activo para abrir chat"); return; }
+                handleMessageDriver();
+              }}
+              disabled={!hasActiveTrip}
+              className="h-14 gap-1 rounded-2xl bg-emerald-600 px-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-300"
+            >
+              <MessageCircle size={16} /> Chat
+            </Button>
+            <Button onClick={handleSOS} variant="outline" className="h-14 gap-1 rounded-2xl border-red-300 bg-red-50 px-2 text-xs font-semibold text-red-600 shadow-sm hover:bg-red-100">
+              <AlertTriangle size={16} /> SOS
+            </Button>
+          </div>
+        </div>
+      </div>
+      {showFloatingHelpers && (
+        <div className="hidden lg:block">
+          <SafetyTipsButton audience="clients" position="bottom-left" />
         </div>
       )}
-      <SafetyTipsButton audience="clients" />
     </div>
   );
 }
-import SafetyTipsButton from "@/components/SafetyTipsButton";

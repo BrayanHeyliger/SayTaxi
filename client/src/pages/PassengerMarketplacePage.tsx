@@ -316,7 +316,7 @@ export default function PassengerMarketplacePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(165deg,_oklch(0.16_0.02_248)_0%,_oklch(0.1_0.018_252)_55%,_oklch(0.085_0.014_255)_100%)] px-2 py-3 text-white sm:px-3 sm:py-4 md:px-4 md:py-8">
+    <div className="min-h-screen overflow-x-hidden bg-[linear-gradient(165deg,_oklch(0.16_0.02_248)_0%,_oklch(0.1_0.018_252)_55%,_oklch(0.085_0.014_255)_100%)] px-2 py-3 text-white sm:px-3 sm:py-4 md:px-4 md:py-8">
       <div className="mx-auto max-w-6xl">
         {/* Mobile Header - Hide on phone, show on tablet+ */}
         <a href="/" className="mb-2 hidden items-center gap-2 text-sm text-white/70 hover:text-white sm:mb-3 md:mb-4 md:inline-flex md:text-base">
@@ -353,10 +353,10 @@ export default function PassengerMarketplacePage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:gap-4 md:gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-2.5 sm:space-y-3 md:space-y-6">
+          <div className="grid min-w-0 gap-3 sm:gap-4 md:gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="min-w-0 space-y-2.5 sm:space-y-3 md:space-y-6">
               {step === "search" && (
-                <section className="space-y-2.5 sm:space-y-3 md:space-y-4">
+                <section className="min-w-0 space-y-2.5 sm:space-y-3 md:space-y-4">
                   {/* Location Inputs - Full width on mobile, larger touch targets */}
                   <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3 md:gap-4">
                     <label className="space-y-1 text-xs text-white/70 sm:space-y-1.5 md:space-y-2 md:text-sm">

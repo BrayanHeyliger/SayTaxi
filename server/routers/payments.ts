@@ -30,15 +30,15 @@ export const paymentsRouter = router({
         });
       }
 
-      const origin = ctx.req.headers.origin || "https://whatsapptaxi-jkudqcvs.manus.space";
+      const origin = ctx.req.headers.origin || "https://passenger.com";
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         line_items: [{
           price_data: {
             currency: "usd",
             product_data: {
-              name: `WhatsAppTaxi — Plan ${input.planName}`,
-              description: `Suscripción mensual al Plan ${input.planName} de WhatsApp Taxi SaaS`,
+              name: `Passenger — Plan ${input.planName}`,
+              description: `Suscripción mensual al Plan ${input.planName} de Passenger`,
             },
             unit_amount: input.amount * 100,
             recurring: { interval: "month" },

@@ -8,6 +8,7 @@ export interface LocalUser {
   email: string;
   role: UserRole;
   phone?: string;
+  photoUrl?: string;
 }
 
 interface LocalAuthContextType {
@@ -16,6 +17,7 @@ interface LocalAuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  updateUser: (patch: Partial<LocalUser>) => void;
   logout: () => void;
 }
 
@@ -73,6 +75,7 @@ export function LocalAuthProvider({ children }: { children: ReactNode }) {
         email: result.email,
         role: (result.role as UserRole) || "client",
         phone: result.phone ?? undefined,
+        photoUrl: result.photoUrl ?? undefined,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
       setUser(userData);
@@ -102,6 +105,7 @@ export function LocalAuthProvider({ children }: { children: ReactNode }) {
         name: result.name,
         email: result.email,
         role: (result.role as UserRole) || data.role,
+        photoUrl: result.photoUrl ?? undefined,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
       setUser(userData);
@@ -116,8 +120,17 @@ export function LocalAuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const updateUser = (patch: Partial<LocalUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
   return (
-    <LocalAuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, register, logout }}>
+    <LocalAuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, register, updateUser, logout }}>
       {children}
     </LocalAuthContext.Provider>
   );

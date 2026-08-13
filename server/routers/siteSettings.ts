@@ -152,7 +152,7 @@ export const siteSettingsRouter = router({
       try {
         // Get config from DB to find notification email and SMTP settings
         const db = await getDb();
-        let notificationEmail = "admin@whatsapptaxi.com";
+        let notificationEmail = "admin@passenger.com";
         let smtpConfig: any = null;
 
         if (db) {
@@ -214,7 +214,7 @@ export const siteSettingsRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      let notificationEmail = "admin@whatsapptaxi.com";
+      let notificationEmail = "admin@passenger.com";
       let smtpConfig: any = null;
 
       if (db) {

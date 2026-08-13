@@ -80,7 +80,7 @@ npm run build
 - Asegúrate que la BD existe
 
 ### Error 500 en el servidor
-- Revisa los logs: `tail -f .manus-logs/devserver.log`
+- Revisa los logs: `tail -f .passenger-logs/devserver.log`
 - Verifica que todas las variables de entorno estén configuradas
 
 ## Próximos Pasos

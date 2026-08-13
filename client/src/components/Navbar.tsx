@@ -1,5 +1,5 @@
 /**
- * Navbar — WhatsApp Taxi SaaS
+ * Navbar — Passenger
  * Design: Verde Operacional — Sora display, Inter body
  * Transparent on top, transitions to dark on scroll
  * Fully functional: auth, navigation, role-based redirects
@@ -7,10 +7,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X, User, Car, LogOut, ChevronDown } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSiteConfig } from "@/contexts/SiteConfigContext";
+import PassengerLogoMark from "@/components/PassengerLogoMark";
 
 // navLinks are now built inside the component using t translations
 
@@ -25,11 +26,12 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [location, setLocation] = useLocation();
   const { lang, t } = useI18n();
   const navLinksTranslated = [
-    { label: lang === "en" ? "For Clients" : lang === "fr" ? "Pour Clients" : "Para Clientes", href: "#clientes" },
-    { label: lang === "en" ? "For Drivers" : lang === "fr" ? "Pour Chauffeurs" : "Para Conductores", href: "#conductores" },
-    { label: lang === "en" ? "For Fleets" : lang === "fr" ? "Pour Flottes" : "Para Flotillas", href: "#flotilla" },
+    { label: lang === "en" ? "For Clients" : lang === "fr" ? "Pour Clients" : "Clientes", href: "#clientes" },
+    { label: lang === "en" ? "For Drivers" : lang === "fr" ? "Pour Chauffeurs" : "Conductores", href: "#conductores" },
+    { label: lang === "en" ? "For Fleets" : lang === "fr" ? "Pour Flottes" : "Flotillas", href: "#flotilla" },
     { label: t.nav.pricing, href: "#pricing" },
     { label: t.nav.contact, href: "#contact" },
     { label: "FAQ", href: "/faq" },
@@ -44,11 +46,20 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
 
   const handleNavClick = (href: string) => {
     setMobileOpen(false);
+    setUserMenuOpen(false);
+
     if (href.startsWith("/")) {
-      window.location.href = href;
+      setLocation(href);
     } else {
+      if (location !== "/") {
+        setLocation(`/${href}`);
+        return;
+      }
+
       const el = document.querySelector(href);
-      if (el) el.scrollIntoView({ behavior: "smooth" });
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
     }
   };
 
@@ -67,13 +78,17 @@ export default function Navbar({ user, isAuthenticated, onLogout, onLogin }: Nav
             href="/"
             className="flex items-center gap-3 group"
           >
-            <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 shadow-lg shadow-green-500/20">
-              <img
-                src={config.logoUrl || "/manus-storage/logo-icon_34950e08.png"}
-                alt="Passenger Logo"
-                className="w-full h-full object-cover"
-                style={{ background: config.primaryColor }}
-              />
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 shadow-lg shadow-cyan-500/20">
+              {config.logoUrl ? (
+                <img
+                  src={config.logoUrl}
+                  alt="Passenger Logo"
+                  className="w-full h-full object-cover"
+                  style={{ background: config.primaryColor }}
+                />
+              ) : (
+                <PassengerLogoMark className="w-full h-full" />
+              )}
             </div>
             <div className="flex flex-col leading-none">
               <span

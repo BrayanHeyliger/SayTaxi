@@ -1,0 +1,102 @@
+<svg width="1440" height="980" viewBox="0 0 1440 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1440" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#1A2638"/>
+    </linearGradient>
+    <linearGradient id="phoneTop" x1="0" y1="0" x2="0" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="cta" x1="0" y1="0" x2="260" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10B981"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="2000" height="2000" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#000000" flood-opacity="0.26"/>
+    </filter>
+    <style>
+      .title { font: 700 42px 'Sora', 'Segoe UI', sans-serif; fill: #E2E8F0; }
+      .subtitle { font: 500 18px 'Inter', 'Segoe UI', sans-serif; fill: #93A4BF; }
+      .label { font: 600 14px 'Inter', 'Segoe UI', sans-serif; fill: #C9D6EA; letter-spacing: 0.06em; }
+      .body { font: 500 18px 'Inter', 'Segoe UI', sans-serif; fill: #E5ECF7; }
+      .small { font: 500 14px 'Inter', 'Segoe UI', sans-serif; fill: #A8B8CF; }
+      .kpi { font: 700 26px 'Sora', 'Segoe UI', sans-serif; fill: #FFFFFF; }
+      .caption { font: 600 12px 'Inter', 'Segoe UI', sans-serif; fill: #8AA0BF; letter-spacing: 0.04em; }
+      .chipText { font: 600 13px 'Inter', 'Segoe UI', sans-serif; fill: #D8E7FF; }
+      .buttonText { font: 700 18px 'Inter', 'Segoe UI', sans-serif; fill: #04241A; }
+      .darkButtonText { font: 700 15px 'Inter', 'Segoe UI', sans-serif; fill: #E8EFFB; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1440" height="980" fill="url(#bg)"/>
+
+  <text x="80" y="100" class="title">Driver Panel Proposal - Mobile First Uber-Like</text>
+  <text x="80" y="136" class="subtitle">Enfoque: mapa protagonista, acciones grandes, estado operativo siempre visible.</text>
+
+  <g transform="translate(100,190)">
+    <rect x="0" y="0" width="470" height="740" rx="52" fill="#050A14"/>
+    <rect x="16" y="16" width="438" height="708" rx="42" fill="#0B1322" filter="url(#shadow)"/>
+    <rect x="190" y="30" width="90" height="8" rx="4" fill="#334155"/>
+
+    <rect x="34" y="56" width="402" height="270" rx="28" fill="url(#phoneTop)"/>
+    <text x="58" y="92" class="caption">ONLINE MODE</text>
+    <text x="58" y="124" class="kpi">En linea - 4 min ETA</text>
+
+    <rect x="58" y="146" width="170" height="38" rx="19" fill="#1E293B"/>
+    <text x="79" y="170" class="chipText">Zona: Downtown</text>
+
+    <rect x="240" y="146" width="170" height="38" rx="19" fill="#1E293B"/>
+    <text x="262" y="170" class="chipText">Demanda alta</text>
+
+    <rect x="58" y="198" width="352" height="112" rx="20" fill="#0F1B2F" stroke="#1F3252"/>
+    <text x="78" y="227" class="small">Pickup</text>
+    <text x="78" y="252" class="body">Brickell Ave 1201</text>
+    <text x="78" y="284" class="small">Dropoff</text>
+    <text x="78" y="307" class="body">Miami Intl Terminal D</text>
+
+    <rect x="34" y="344" width="402" height="190" rx="22" fill="#0E1728" stroke="#1F2A44"/>
+    <text x="54" y="372" class="label">LIVE MAP PREVIEW</text>
+    <path d="M70 484 C120 430, 210 450, 260 410 C290 385, 340 388, 390 360" stroke="#34D399" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <circle cx="70" cy="484" r="8" fill="#10B981"/>
+    <circle cx="390" cy="360" r="8" fill="#60A5FA"/>
+
+    <rect x="34" y="548" width="402" height="68" rx="20" fill="url(#cta)"/>
+    <text x="116" y="591" class="buttonText">Aceptar viaje - $24.50</text>
+
+    <rect x="34" y="628" width="194" height="66" rx="18" fill="#1E293B"/>
+    <text x="95" y="668" class="darkButtonText">Navegar</text>
+
+    <rect x="242" y="628" width="194" height="66" rx="18" fill="#7F1D1D"/>
+    <text x="322" y="668" class="darkButtonText">SOS</text>
+  </g>
+
+  <g transform="translate(650,210)">
+    <text x="0" y="0" class="title" style="font-size:30px;">Estructura recomendada</text>
+
+    <rect x="0" y="36" width="680" height="120" rx="18" fill="#0F172A" stroke="#243247"/>
+    <text x="24" y="68" class="label">1. HEADER COMPACTO</text>
+    <text x="24" y="95" class="small">Foto, estado online/offline, campana, ganancias del dia.</text>
+    <text x="24" y="122" class="small">Sin ruido visual, foco en disponibilidad.</text>
+
+    <rect x="0" y="176" width="680" height="120" rx="18" fill="#0F172A" stroke="#243247"/>
+    <text x="24" y="208" class="label">2. BLOQUE DE VIAJE ACTIVO</text>
+    <text x="24" y="235" class="small">Pickup + dropoff + ETA + tarifa siempre visibles.</text>
+    <text x="24" y="262" class="small">Boton principal contextual: Aceptar, Llegue, Iniciar, Finalizar.</text>
+
+    <rect x="0" y="316" width="680" height="120" rx="18" fill="#0F172A" stroke="#243247"/>
+    <text x="24" y="348" class="label">3. MAPA COMO EJE</text>
+    <text x="24" y="375" class="small">Mapa arriba de la mitad de pantalla en mobile, ruta en vivo y CTA flotantes.</text>
+    <text x="24" y="402" class="small">No esconder el mapa detras de tabs secundarias.</text>
+
+    <rect x="0" y="456" width="680" height="120" rx="18" fill="#0F172A" stroke="#243247"/>
+    <text x="24" y="488" class="label">4. ACCIONES RAPIDAS TIPO APP</text>
+    <text x="24" y="515" class="small">Navegar, Chat y SOS en barra fija inferior con botones grandes.</text>
+    <text x="24" y="542" class="small">Evitar botones pequenos o texto muy largo en momentos criticos.</text>
+
+    <rect x="0" y="596" width="680" height="120" rx="18" fill="#0F172A" stroke="#243247"/>
+    <text x="24" y="628" class="label">5. TABS SECUNDARIAS FUERA DEL FLUJO</text>
+    <text x="24" y="655" class="small">Ganancias, perfil, docs y referidos en pestañas inferiores o drawer.</text>
+    <text x="24" y="682" class="small">Durante viaje activo, priorizar operacion y seguridad.</text>
+  </g>
+</svg>

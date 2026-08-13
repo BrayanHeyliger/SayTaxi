@@ -24,8 +24,8 @@ export const ENV = {
   // Codeium / other external LLM provider support
   codeiumApiUrl: process.env.CODEIUM_API_URL ?? process.env.BUILT_IN_CODEIUM_API_URL ?? "",
   codeiumApiKey: process.env.CODEIUM_API_KEY ?? process.env.BUILT_IN_CODEIUM_API_KEY ?? "",
-  // Force Codeium usage by default to avoid using paid external providers
-  useCodeium: toBool(process.env.USE_CODEIUM, true),
+  // Default to local/offline mode; external providers must be explicitly enabled.
+  useCodeium: toBool(process.env.USE_CODEIUM, false),
   // LocalAI support (self-hosted inference server)
   localaiUrl: process.env.LOCALAI_URL ?? process.env.LOCAL_AI_URL ?? "",
   useLocalAI: toBool(process.env.USE_LOCALAI, false),
@@ -35,8 +35,8 @@ export const ENV = {
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434",
   // Ollama/Qwen disabled by default; set OLLAMA_MODEL + OLLAMA_AUTOSTART=true to re-enable.
   ollamaModel: process.env.OLLAMA_MODEL ?? "",
-  // Do not prefer local Ollama by default when forcing Codeium
-  localLlmOnly: toBool(process.env.LOCAL_LLM_ONLY, false),
+  // Prefer local Ollama by default to avoid cloud usage.
+  localLlmOnly: toBool(process.env.LOCAL_LLM_ONLY, true),
   ollamaAutoStart: toBool(process.env.OLLAMA_AUTOSTART, false),
   llmRequestTimeoutMs: toInt(process.env.LLM_REQUEST_TIMEOUT_MS, 45_000),
   ollamaBootTimeoutMs: toInt(process.env.OLLAMA_BOOT_TIMEOUT_MS, 20_000),

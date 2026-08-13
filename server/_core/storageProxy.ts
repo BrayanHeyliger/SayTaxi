@@ -3,10 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENV } from "./env";
 
-const localAssetRoot = path.resolve(import.meta.dirname, "../../client/public/manus-storage");
+const localAssetRoot = path.resolve(import.meta.dirname, "../../client/public/assets-storage");
 
 export function registerStorageProxy(app: Express) {
-  app.get("/manus-storage/*", async (req, res) => {
+  const handleStorageRequest = async (req: any, res: any) => {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {
       res.status(400).send("Missing storage key");
@@ -55,5 +55,7 @@ export function registerStorageProxy(app: Express) {
       console.error("[StorageProxy] failed:", err);
       res.status(502).send("Storage proxy error");
     }
-  });
+  };
+
+  app.get("/assets-storage/*", handleStorageRequest);
 }

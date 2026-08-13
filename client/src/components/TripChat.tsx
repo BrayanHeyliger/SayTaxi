@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, MessageCircle, X, Minimize2, Wifi, WifiOff, Phone, PhoneOff, PhoneIncoming, PhoneMissed } from "lucide-react";
+import { Send, MessageCircle, X, Minimize2, Wifi, WifiOff, Phone, PhoneOff, PhoneIncoming, PhoneMissed, ArrowLeft } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -13,15 +13,31 @@ interface TripChatProps {
   className?: string;
   forceOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  showLauncher?: boolean;
+  fullScreen?: boolean;
+  enableBackClose?: boolean;
 }
 
-export function TripChat({ tripId, userId, userName, role, otherPartyName, className, forceOpen, onOpenChange }: TripChatProps) {
+export function TripChat({
+  tripId,
+  userId,
+  userName,
+  role,
+  otherPartyName,
+  className,
+  forceOpen,
+  onOpenChange,
+  showLauncher = true,
+  fullScreen = false,
+  enableBackClose = false,
+}: TripChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyPushedRef = useRef(false);
 
   const {
     messages, isConnected, typingUser, sendMessage, sendTyping,
@@ -103,11 +119,40 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
     };
   }, []);
 
+  useEffect(() => {
+    if (!enableBackClose || !isOpen) return;
+
+    historyPushedRef.current = true;
+    window.history.pushState({ ...(window.history.state || {}), tripChatOpen: true }, "");
+
+    const handlePopState = () => {
+      historyPushedRef.current = false;
+      setIsOpen(false);
+      onOpenChange?.(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [enableBackClose, isOpen, onOpenChange]);
+
   const handleOpen = () => {
     onOpenChange?.(true);
     setIsOpen(true);
     setUnreadCount(0);
     setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleClose = () => {
+    if (enableBackClose && historyPushedRef.current) {
+      historyPushedRef.current = false;
+      window.history.back();
+      return;
+    }
+
+    setIsOpen(false);
+    onOpenChange?.(false);
   };
 
   const handleStartCall = async () => {
@@ -131,22 +176,28 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
   };
 
   if (!tripId) return null;
+  if (!isOpen && !showLauncher) return null;
 
   const callActive = callState === "active";
   const callCalling = callState === "calling";
   const callIncoming = callState === "incoming";
 
   return (
-    <div className={cn("fixed bottom-6 right-6 z-[9990] flex flex-col items-end gap-3", className)}>
+    <div className={cn(fullScreen ? "fixed inset-0 z-[9998]" : "fixed bottom-6 right-6 z-[9990] flex flex-col items-end gap-3", className)}>
       {/* Chat window */}
       {isOpen && (
-        <div className="w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
-          style={{ height: "460px" }}>
+        <div
+          className={cn(
+            "overflow-hidden border border-white/60 bg-white/80 shadow-[0_28px_80px_rgba(15,23,42,0.22)] backdrop-blur-xl flex flex-col animate-in fade-in zoom-in-95 duration-200",
+            fullScreen ? "h-full w-full rounded-none" : "w-80 rounded-[26px]"
+          )}
+          style={fullScreen ? undefined : { height: "460px" }}
+        >
 
           {/* Header */}
-          <div className="bg-gradient-to-r from-green-600 to-green-500 px-4 py-3 flex items-center justify-between flex-shrink-0">
+          <div className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 px-4 py-3.5 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm">
+              <div className="w-8 h-8 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center text-white font-bold text-sm">
                 {otherPartyName[0]?.toUpperCase()}
               </div>
               <div>
@@ -173,9 +224,15 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
                   <PhoneOff size={15} />
                 </button>
               )}
-              <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors">
-                <Minimize2 size={16} />
-              </button>
+              {fullScreen ? (
+                <button onClick={handleClose} className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors" aria-label="Volver" title="Volver">
+                  <ArrowLeft size={16} />
+                </button>
+              ) : (
+                <button onClick={handleClose} className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors" aria-label="Minimizar" title="Minimizar">
+                  <Minimize2 size={16} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -216,7 +273,7 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gradient-to-b from-white/70 to-slate-100/80">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <MessageCircle size={32} className="text-slate-300 mb-2" />
@@ -231,8 +288,8 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
                   <div className={cn(
                     "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
                     isMe
-                      ? "bg-green-500 text-white rounded-br-sm"
-                      : "bg-white text-slate-900 rounded-bl-sm border border-slate-200"
+                      ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-br-sm"
+                      : "bg-white/95 text-slate-900 rounded-bl-sm border border-slate-200"
                   )}>
                     {!isMe && <p className="text-xs font-semibold mb-0.5 text-green-600">{msg.sender}</p>}
                     <p className="leading-relaxed break-words">{msg.text}</p>
@@ -260,7 +317,7 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t border-slate-200 bg-white flex-shrink-0">
+          <div className="p-3 border-t border-white/60 bg-white/85 backdrop-blur-sm flex-shrink-0">
             <div className="flex items-center gap-2">
               <input
                 ref={inputRef}
@@ -269,13 +326,13 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Escribe un mensaje..."
-                className="flex-1 px-3 py-2 bg-slate-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition-all"
+                className="flex-1 px-3 py-2 bg-white/90 border border-slate-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
                 disabled={!isConnected}
               />
               <button
                 onClick={handleSend}
                 disabled={!inputText.trim() || !isConnected}
-                className="w-9 h-9 rounded-full bg-green-500 hover:bg-green-600 disabled:bg-slate-300 flex items-center justify-center transition-colors flex-shrink-0"
+                className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 flex items-center justify-center transition-colors flex-shrink-0"
               >
                 <Send size={15} className="text-white" />
               </button>
@@ -284,29 +341,31 @@ export function TripChat({ tripId, userId, userName, role, otherPartyName, class
         </div>
       )}
 
-      {/* Floating button */}
-      <button
-        onClick={isOpen ? () => { setIsOpen(false); onOpenChange?.(false); } : handleOpen}
-        className={cn(
-          "w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 relative",
-          callIncoming ? "bg-green-500 animate-bounce shadow-green-500/50" : "bg-green-500 hover:bg-green-600 shadow-green-500/30"
-        )}
-      >
-        {isOpen
-          ? <X size={22} className="text-white" />
-          : callIncoming
-            ? <PhoneIncoming size={22} className="text-white" />
-            : <MessageCircle size={22} className="text-white" />
-        }
-        {!isOpen && unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-bounce">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
-        )}
-        {!isOpen && isConnected && callState === "idle" && (
-          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-300 border-2 border-white rounded-full" />
-        )}
-      </button>
+      {/* Floating launcher can be disabled in dashboards to avoid extra bubble icons */}
+      {showLauncher && (
+        <button
+          onClick={isOpen ? handleClose : handleOpen}
+          className={cn(
+            "w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 relative",
+            callIncoming ? "bg-green-500 animate-bounce shadow-green-500/50" : "bg-green-500 hover:bg-green-600 shadow-green-500/30"
+          )}
+        >
+          {isOpen
+            ? <X size={22} className="text-white" />
+            : callIncoming
+              ? <PhoneIncoming size={22} className="text-white" />
+              : <MessageCircle size={22} className="text-white" />
+          }
+          {!isOpen && unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-bounce">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+          {!isOpen && isConnected && callState === "idle" && (
+            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-300 border-2 border-white rounded-full" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

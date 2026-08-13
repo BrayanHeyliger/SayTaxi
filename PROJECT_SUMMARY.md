@@ -4,7 +4,7 @@
 - **Landing Page:** Completa con diseño Verde Operacional, demostración animada del bot
 - **Backend:** Node.js + Express + tRPC configurado
 - **Base de Datos:** MySQL con 10 tablas (users, clients, drivers, vehicles, trips, ratings, payments, pricingRules, subscriptions, companySubscriptions)
-- **Autenticación:** Manus OAuth integrado
+- **Autenticación:** OAuth integrado
 - **Sistema de Roles:** user, admin, client, driver
 
 ## Credenciales Super Admin
@@ -45,7 +45,7 @@
 - Frontend: React 19 + Tailwind CSS 4
 - Backend: Node.js + Express + tRPC
 - BD: MySQL 8.x
-- Auth: Manus OAuth
+- Auth: OAuth
 - Pagos: Stripe + PayPal (pendiente)
 - Mapas: Google Maps API
 

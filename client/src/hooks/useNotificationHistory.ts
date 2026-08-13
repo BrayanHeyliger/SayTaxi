@@ -123,7 +123,7 @@ export function useNotificationHistory(role: string = "client") {
     const notif: StoredNotification = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       message,
-      title: options?.title || "WhatsApp Taxi",
+      title: options?.title || "Passenger",
       type: options?.type || "info",
       timestamp: Date.now(),
       read: false,

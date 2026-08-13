@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Abrir Chat Local</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --card: #ffffff;
+        --text: #111827;
+        --muted: #4b5563;
+        --line: #d1d5db;
+        --btn: #0f766e;
+        --btn-hover: #0d5f58;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: radial-gradient(circle at top, #e6fffb, var(--bg) 45%);
+        color: var(--text);
+      }
+
+      .card {
+        width: min(560px, 100%);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.5rem;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      a,
+      button {
+        border: 1px solid var(--btn);
+        background: var(--btn);
+        color: #fff;
+        text-decoration: none;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+
+      a.secondary {
+        background: transparent;
+        color: var(--btn);
+      }
+
+      button:hover,
+      a:hover {
+        background: var(--btn-hover);
+        border-color: var(--btn-hover);
+      }
+
+      a.secondary:hover {
+        color: #fff;
+      }
+
+      code {
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Chat Local Passenger</h1>
+      <p>Abre rapido el chat local. Si un puerto no responde, usa el otro boton.</p>
+      <div class="actions">
+        <a href="http://127.0.0.1:4895/" target="_blank" rel="noopener noreferrer">Abrir chat (4895)</a>
+        <a class="secondary" href="http://127.0.0.1:4891/" target="_blank" rel="noopener noreferrer">Abrir chat (4891)</a>
+        <button id="openBoth" type="button">Probar ambos</button>
+      </div>
+      <p style="margin-top: 16px;">
+        Comando rapido desde terminal:<br />
+        <code>pnpm chat:open</code>
+      </p>
+    </main>
+
+    <script>
+      document.getElementById("openBoth").addEventListener("click", function () {
+        window.open("http://127.0.0.1:4895/", "_blank", "noopener,noreferrer");
+        setTimeout(function () {
+          window.open("http://127.0.0.1:4891/", "_blank", "noopener,noreferrer");
+        }, 350);
+      });
+    </script>
+  </body>
+</html>

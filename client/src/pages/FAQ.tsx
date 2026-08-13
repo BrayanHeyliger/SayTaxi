@@ -60,11 +60,13 @@ export default function FAQPage() {
   const [search, setSearch] = useState("");
   const [openItem, setOpenItem] = useState<number | null>(0);
   const [faqs, setFaqs] = useState<FAQItem[]>(defaultFAQs);
+  const CONFIG_KEY = "passenger_site_config";
+  const LEGACY_CONFIG_KEY = "wataxi_config";
 
   // Load custom FAQs from siteConfig if available
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("wataxi_config");
+      const stored = localStorage.getItem(CONFIG_KEY) || localStorage.getItem(LEGACY_CONFIG_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed.customFAQs && Array.isArray(parsed.customFAQs) && parsed.customFAQs.length > 0) {

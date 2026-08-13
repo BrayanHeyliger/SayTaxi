@@ -113,7 +113,7 @@ function normalizeSiteConfig(raw?: Partial<SiteConfig> | null): SiteConfig {
   };
 }
 
-const STORAGE_KEY = "wataxi_site_config";
+const STORAGE_KEY = "passenger_site_config";
 const LEGACY_STORAGE_KEYS = ["wataxi_site_config", "wataxi_config", "wataxi_lang"];
 
 function resetLegacyStorage() {
@@ -131,7 +131,7 @@ function resetLegacyStorage() {
 
 function loadConfig(): SiteConfig {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("wataxi_site_config");
     if (!stored) {
       resetLegacyStorage();
       return DEFAULT_SITE_CONFIG;
@@ -238,6 +238,11 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
   // Apply CSS variables whenever config changes
   useEffect(() => {
     const root = document.documentElement;
+    root.style.setProperty("--passenger-primary", config.primaryColor);
+    root.style.setProperty("--passenger-secondary", config.secondaryColor);
+    root.style.setProperty("--passenger-accent", config.accentColor);
+    root.style.setProperty("--passenger-font", config.fontFamily);
+    // Legacy CSS vars for backward compatibility with stale styles.
     root.style.setProperty("--wataxi-primary", config.primaryColor);
     root.style.setProperty("--wataxi-secondary", config.secondaryColor);
     root.style.setProperty("--wataxi-accent", config.accentColor);

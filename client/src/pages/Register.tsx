@@ -169,7 +169,7 @@ export default function Register() {
               <img src="/assets-storage/logo-icon_34950e08.png" alt="Logo" className="w-full h-full object-cover" style={{ background: "oklch(0.76 0.18 148)" }} />
             </div>
             <span className="text-white font-bold text-xl" style={{ fontFamily: "'Sora', sans-serif" }}>
-              WhatsApp<span className="text-[oklch(0.76_0.18_148)]">Taxi</span>
+              Passenger
             </span>
           </a>
         </div>

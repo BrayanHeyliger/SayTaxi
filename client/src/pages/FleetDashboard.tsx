@@ -95,6 +95,16 @@ export default function FleetDashboard() {
   const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [activeChatTrip, setActiveChatTrip] = useState<string | null>(null);
+  const [activeChatName, setActiveChatName] = useState("Conductor");
+  const [chatOpen, setChatOpen] = useState(false);
+  const showFloatingHelpers = !chatOpen;
+
+  const openDriverChat = (driver: Driver) => {
+    setActiveChatTrip(`fleet-driver-${driver.id}`);
+    setActiveChatName(driver.name.split(" ")[0] || "Conductor");
+    setChatOpen(true);
+    toast.info(`💬 Chat con ${driver.name.split(" ")[0]} abierto`);
+  };
 
   useEffect(() => { if (!isAuthenticated) navigate("/login"); }, [isAuthenticated]);
 
@@ -372,8 +382,8 @@ export default function FleetDashboard() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
                               <button onClick={() => setSelectedDriver(d)} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500" title="Ver detalles"><Eye size={14} /></button>
-                              <button onClick={() => { setActiveChatTrip(`fleet-driver-${d.id}`); toast.info(`💬 Chat con ${d.name.split(" ")[0]} abierto`); }} className="p-1.5 rounded-lg hover:bg-green-50 text-green-500" title="Contactar por chat"><MessageCircle size={14} /></button>
-                              <button onClick={() => { setActiveChatTrip(`fleet-driver-${d.id}`); toast.info(`Chat con ${d.name.split(" ")[0]} abierto`); }} className="p-1.5 rounded-lg hover:bg-purple-50 text-purple-500" title="Chat"><MessageCircle size={14} /></button>
+                              <button onClick={() => openDriverChat(d)} className="p-1.5 rounded-lg hover:bg-green-50 text-green-500" title="Contactar por chat"><MessageCircle size={14} /></button>
+                              <button onClick={() => openDriverChat(d)} className="p-1.5 rounded-lg hover:bg-purple-50 text-purple-500" title="Chat"><MessageCircle size={14} /></button>
                               {d.status === "active" && <button onClick={() => handleDriverAction(d.id, "suspend")} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500" title="Suspender"><UserX size={14} /></button>}
                               {(d.status === "suspended" || d.status === "inactive") && <button onClick={() => handleDriverAction(d.id, "activate")} className="p-1.5 rounded-lg hover:bg-green-50 text-green-500" title="Activar"><UserCheck size={14} /></button>}
                               {d.status === "pending" && <button onClick={() => handleDriverAction(d.id, "approve")} className="p-1.5 rounded-lg hover:bg-green-50 text-green-600" title="Aprobar"><CheckCircle size={14} /></button>}
@@ -590,7 +600,12 @@ export default function FleetDashboard() {
           userId={user?.id != null ? String(user.id) : "fleet"}
           userName={user?.name || "Flotilla"}
           role="client"
-          otherPartyName="Conductor"
+          otherPartyName={activeChatName}
+          showLauncher={false}
+          fullScreen
+          enableBackClose
+          forceOpen={chatOpen}
+          onOpenChange={setChatOpen}
         />
       )}
 
@@ -627,19 +642,22 @@ export default function FleetDashboard() {
               ))}
             </div>
             <div className="flex gap-2 mt-4">
-              <Button className="flex-1 bg-green-500 hover:bg-green-600 text-white gap-2 text-sm" onClick={() => { setActiveChatTrip(`fleet-driver-${selectedDriver.id}`); setSelectedDriver(null); }}><MessageCircle size={14} /> Chat Seguro</Button>
-              <Button variant="outline" className="flex-1 gap-2 text-sm" onClick={() => { setActiveChatTrip(`fleet-driver-${selectedDriver.id}`); setSelectedDriver(null); }}><MessageCircle size={14} /> Chat</Button>
+              <Button className="flex-1 bg-green-500 hover:bg-green-600 text-white gap-2 text-sm" onClick={() => { openDriverChat(selectedDriver); setSelectedDriver(null); }}><MessageCircle size={14} /> Chat Seguro</Button>
+              <Button variant="outline" className="flex-1 gap-2 text-sm" onClick={() => { openDriverChat(selectedDriver); setSelectedDriver(null); }}><MessageCircle size={14} /> Chat</Button>
             </div>
           </Card>
         </div>
       )}
-      <GlobalMascotAssistant
-        storageKey="wt_mascot_fleet"
-        title="Asistente Flotilla"
-        mood={fleetMascotMood}
-        messages={fleetMascotMessages}
-      />
-      <SafetyTipsButton audience="fleet" />
+      {showFloatingHelpers && (
+        <GlobalMascotAssistant
+          storageKey="wt_mascot_fleet"
+          title="Asistente Flotilla"
+          mood={fleetMascotMood}
+          messages={fleetMascotMessages}
+          className="left-3 right-auto sm:right-5 sm:left-auto"
+        />
+      )}
+      {showFloatingHelpers && <SafetyTipsButton audience="fleet" position="bottom-left" />}
     </div>
   );
 }

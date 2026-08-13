@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useLocalAuth } from "@/contexts/LocalAuthContext";
  import Navbar from "@/components/Navbar";
  import HeroSection from "@/components/HeroSection";
@@ -12,36 +11,12 @@ import { useLocalAuth } from "@/contexts/LocalAuthContext";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import WhatsAppFloatingButton from "@/components/WhatsAppFloatingButton";
 import { ParcelPromoBar } from "@/components/ParcelPromoBar";
-import PassengerMascot from "@/components/PassengerMascot";
 
 export default function Home() {
   const { user, isAuthenticated, logout } = useLocalAuth();
-  const [showEntrySplash, setShowEntrySplash] = useState(true);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setShowEntrySplash(false), 2200);
-    return () => window.clearTimeout(timer);
-  }, []);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[linear-gradient(165deg,_oklch(0.16_0.02_248)_0%,_oklch(0.1_0.018_252)_55%,_oklch(0.085_0.014_255)_100%)]">
-      {showEntrySplash && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[oklch(0.11_0.014_252/0.94)] backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-sm rounded-3xl border border-emerald-300/25 bg-white/8 px-5 py-6 text-center shadow-[0_24px_60px_-24px_rgba(16,185,129,0.45)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">Passenger esta iniciando</p>
-            <div className="mt-4 flex items-center justify-center">
-              <PassengerMascot mood="searching" size="lg" animated />
-            </div>
-            <div className="mt-3 h-9 overflow-hidden rounded-full border border-emerald-300/20 bg-black/25 px-3">
-              <div className="flex h-full items-center gap-2 animate-mascot-walk text-sm text-emerald-100/95 whitespace-nowrap">
-                <span>🚕</span>
-                <span>Buscando el mejor conductor para ti...</span>
-              </div>
-            </div>
-            <p className="mt-3 text-sm text-white/70">Tu asistente te acompana desde el primer segundo.</p>
-          </div>
-        </div>
-      )}
       <div className="pointer-events-none absolute inset-0 opacity-75 sm:opacity-80">
         <div className="absolute -left-24 top-10 h-64 w-64 rounded-full bg-[radial-gradient(circle,_oklch(0.76_0.18_148/0.2),_transparent_66%)] blur-xl sm:h-80 sm:w-80 sm:blur-2xl" />
         <div className="absolute right-[-140px] top-[240px] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,_oklch(0.68_0.07_210/0.18),_transparent_68%)] blur-2xl sm:h-[420px] sm:w-[420px] sm:blur-3xl" />
@@ -94,7 +69,7 @@ export default function Home() {
         <ContactSection />
         <FooterSection />
         <PWAInstallBanner />
-        <WhatsAppFloatingButton />
+        <WhatsAppFloatingButton compact />
       </div>
     </div>
   );

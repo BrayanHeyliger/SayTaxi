@@ -105,7 +105,7 @@ export default function ContactSection() {
             {/* Contact Info Cards */}
             <div className="space-y-3">
               {[
-                { icon: Mail, label: "Email", value: config.contactEmail || "hola@whatsapptaxi.com" },
+                { icon: Mail, label: "Email", value: config.contactEmail || "hola@passenger.com" },
                 { icon: Phone, label: "Teléfono", value: config.contactPhone || "+1 (555) 000-0000" },
                 { icon: MapPin, label: "Ubicación", value: config.contactAddress || "Ciudad de México, México" },
               ].map(({ icon: Icon, label, value }) => (

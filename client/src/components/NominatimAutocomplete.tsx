@@ -38,26 +38,41 @@ export default function NominatimAutocomplete({
     if (!navigator.geolocation) return;
 
     let cancelled = false;
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      if (cancelled) return;
-      setLoading(true);
-      try {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, { headers: { "Accept-Language": "es,en;q=0.9" } });
-        const data = await res.json();
-        const parts = data.display_name?.split(",") || [];
-        const short = parts.slice(0, 2).join(",").trim() || "Mi ubicación actual";
-        onChange(short);
-        onSelect(short, lat, lng);
-      } catch {
-        const short = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
-        onChange(short);
-        onSelect(short, pos.coords.latitude, pos.coords.longitude);
-      } finally {
-        if (!cancelled) setLoading(false);
+
+    const runAutoLocate = async () => {
+      // Avoid repeated browser permission prompts from automatic location calls.
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({ name: "geolocation" });
+          if (permission.state !== "granted") return;
+        } catch {
+          return;
+        }
       }
-    });
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        if (cancelled) return;
+        setLoading(true);
+        try {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, { headers: { "Accept-Language": "es,en;q=0.9" } });
+          const data = await res.json();
+          const parts = data.display_name?.split(",") || [];
+          const short = parts.slice(0, 2).join(",").trim() || "Mi ubicación actual";
+          onChange(short);
+          onSelect(short, lat, lng);
+        } catch {
+          const short = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+          onChange(short);
+          onSelect(short, pos.coords.latitude, pos.coords.longitude);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      });
+    };
+
+    runAutoLocate();
 
     return () => { cancelled = true; };
   }, [autoLocate, onChange, onSelect, value]);

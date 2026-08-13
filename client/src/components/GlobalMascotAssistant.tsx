@@ -9,6 +9,7 @@ interface GlobalMascotAssistantProps {
   title?: string;
   messages: string[];
   mood?: MascotMood;
+  className?: string;
 }
 
 export default function GlobalMascotAssistant({
@@ -16,6 +17,7 @@ export default function GlobalMascotAssistant({
   title = "Asistente Passenger",
   messages,
   mood = "idle",
+  className,
 }: GlobalMascotAssistantProps) {
   const [hidden, setHidden] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -45,7 +47,7 @@ export default function GlobalMascotAssistant({
     if (muted || messages.length <= 1) return;
     const timer = window.setInterval(() => {
       setIndex((prev) => (prev + 1) % messages.length);
-    }, 2800);
+    }, 5200);
     return () => window.clearInterval(timer);
   }, [messages.length, muted]);
 
@@ -59,7 +61,7 @@ export default function GlobalMascotAssistant({
       <button
         type="button"
         onClick={() => setHidden(false)}
-        className="fixed bottom-5 right-5 z-[70] inline-flex items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30"
+        className={`fixed bottom-24 right-3 z-[70] inline-flex items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 sm:bottom-5 sm:right-5 ${className || ""}`}
       >
         <MessageCircle size={15} />
         Ver asistente
@@ -68,7 +70,7 @@ export default function GlobalMascotAssistant({
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-[70] w-[300px] rounded-3xl border border-emerald-200/70 bg-white/95 p-3 shadow-[0_22px_45px_-22px_rgba(0,0,0,0.45)] backdrop-blur-md">
+    <div className={`fixed bottom-24 right-3 z-[70] w-[300px] max-w-[calc(100vw-1.25rem)] rounded-3xl border border-emerald-200/70 bg-white/95 p-3 shadow-[0_22px_45px_-22px_rgba(0,0,0,0.45)] backdrop-blur-md sm:bottom-5 sm:right-5 sm:max-w-[300px] ${className || ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <PassengerMascot mood={mood} size="sm" animated />

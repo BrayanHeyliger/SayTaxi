@@ -171,7 +171,7 @@ node dist/index.js
 ## 📞 Soporte
 
 Para problemas técnicos:
-1. Revisa los logs en `.manus-logs/`
+1. Revisa los logs en `.passenger-logs/`
 2. Verifica la configuración de .env
 3. Asegúrate que MySQL esté corriendo
 4. Reinstala dependencias si es necesario
