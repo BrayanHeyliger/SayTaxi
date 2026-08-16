@@ -115,3 +115,6 @@ client/public/__debug__/version.json
 
 # Python virtualenv
 .venv-openwebui/
+
+# Resultados efímeros de pruebas de carga
+load-results/

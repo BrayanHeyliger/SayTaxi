@@ -13,6 +13,11 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { sdk } from "./sdk";
+import { rawQuery } from "../db";
+import { handleStripeWebhook } from "../routers/payments";
+import { validateProductionEnvironment } from "./productionConfig";
+import { configureTelemetry } from "../realtime/telemetry";
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -126,89 +131,140 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  validateProductionEnvironment();
   await ensureLocalLlmReady();
 
   const app = express();
+  app.disable("x-powered-by");
+  if (ENV.isProduction) app.set("trust proxy", 1);
   const server = createServer(app);
 
-  // ── Socket.io — Real-time chat & trip events ────────────────────────────────
+  app.get("/healthz", async (_req, res) => {
+    try {
+      await rawQuery("SELECT 1 AS ok");
+      res.status(200).json({ ok: true, service: "saytaxi", database: "ready", timestamp: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ ok: false, service: "saytaxi", database: "unavailable", timestamp: new Date().toISOString() });
+    }
+  });
+
+  // Stripe must receive its original raw body to validate webhook signatures.
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
+
+  // ── Socket.io — authenticated, trip-scoped real-time events ────────────────
+  const isAllowedOrigin = (origin: string | undefined) => !origin || ENV.allowedOrigins.includes(origin);
   const io = new SocketIOServer(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: {
+      origin: (origin, callback) => callback(isAllowedOrigin(origin) ? null : new Error("Origin not allowed"), isAllowedOrigin(origin)),
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
     path: "/socket.io",
   });
 
-  // In-memory store: roomId → messages[]
+  const telemetry = ENV.telemetryEnabled
+    ? await configureTelemetry(io, ENV.redisUrl)
+    : null;
+  if (ENV.telemetryEnabled) console.info("[telemetry] Redis-backed trip tracking enabled");
+
+  type SocketUser = { id: number; role: string; name: string };
   const chatRooms = new Map<string, { id: string; sender: string; senderRole: string; text: string; time: string }[]>();
 
+  const canAccessTripRoom = async (user: SocketUser, roomId: string) => {
+    if (!/^\d+$/.test(roomId)) return false;
+    if (user.role === "admin") return true;
+    const rows = await rawQuery<{ clientUserId: number; driverUserId: number | null }>(
+      `SELECT c.userId AS clientUserId, d.userId AS driverUserId
+       FROM trips t
+       INNER JOIN clients c ON c.id = t.clientId
+       LEFT JOIN drivers d ON d.id = t.driverId
+       WHERE t.id = ? LIMIT 1`,
+      [Number(roomId)],
+    );
+    const trip = rows[0];
+    return Boolean(trip && (trip.clientUserId === user.id || trip.driverUserId === user.id));
+  };
+
+  io.use(async (socket, next) => {
+    try {
+      const user = await sdk.authenticateRequest(socket.request as any);
+      if (!user || user.isActive === false) return next(new Error("Unauthorized"));
+      socket.data.user = { id: user.id, role: user.role, name: user.name || "Usuario" } satisfies SocketUser;
+      return next();
+    } catch {
+      return next(new Error("Unauthorized"));
+    }
+  });
+
   io.on("connection", (socket) => {
-    console.log(`[Socket.io] Client connected: ${socket.id}`);
+    const user = socket.data.user as SocketUser;
 
-    // Join a trip chat room
-    socket.on("join_room", ({ roomId, userId, role }: { roomId: string; userId: string; role: string }) => {
+    const belongsToRoom = (roomId: string) => socket.data.roomId === roomId && socket.rooms.has(roomId);
+    const requireRoom = (roomId: string) => {
+      if (!belongsToRoom(roomId)) {
+        socket.emit("room_error", { message: "No autorizado para esta sala" });
+        return false;
+      }
+      return true;
+    };
+
+    socket.on("join_room", async ({ roomId }: { roomId: string }) => {
+      if (!(await canAccessTripRoom(user, roomId))) {
+        socket.emit("room_error", { message: "No autorizado para este viaje" });
+        return;
+      }
       socket.join(roomId);
-      socket.data.userId = userId;
-      socket.data.role = role;
       socket.data.roomId = roomId;
-      // Send message history to the new joiner
-      const history = chatRooms.get(roomId) || [];
-      socket.emit("message_history", history);
-      console.log(`[Socket.io] ${role} ${userId} joined room ${roomId}`);
+      socket.emit("message_history", chatRooms.get(roomId) || []);
+      await telemetry?.sendSnapshot(socket, Number(roomId));
     });
 
-    // Send a chat message
-    socket.on("send_message", ({ roomId, message }: { roomId: string; message: { id: string; sender: string; senderRole: string; text: string; time: string } }) => {
-      if (!chatRooms.has(roomId)) chatRooms.set(roomId, []);
-      const room = chatRooms.get(roomId)!;
-      room.push(message);
-      // Keep last 100 messages per room
+    socket.on("send_message", ({ roomId, message }: { roomId: string; message: { id?: string; text?: string } }) => {
+      if (!requireRoom(roomId) || !message?.text?.trim()) return;
+      const safeMessage = {
+        id: message.id || `${Date.now()}-${socket.id}`,
+        sender: user.name,
+        senderRole: user.role,
+        text: message.text.trim().slice(0, 4000),
+        time: new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }),
+      };
+      const room = chatRooms.get(roomId) || [];
+      room.push(safeMessage);
       if (room.length > 100) room.splice(0, room.length - 100);
-      // Broadcast to all in room (including sender for confirmation)
-      io.to(roomId).emit("new_message", message);
+      chatRooms.set(roomId, room);
+      io.to(roomId).emit("new_message", safeMessage);
     });
 
-    // Typing indicator
-    socket.on("typing", ({ roomId, sender }: { roomId: string; sender: string }) => {
-      socket.to(roomId).emit("user_typing", { sender });
+    socket.on("typing", ({ roomId }: { roomId: string }) => {
+      if (requireRoom(roomId)) socket.to(roomId).emit("user_typing", { sender: user.name });
     });
 
-    // Trip status updates (driver → client)
-    socket.on("trip_status", ({ roomId, status, data }: { roomId: string; status: string; data?: any }) => {
+    socket.on("trip_status", ({ roomId, status, data }: { roomId: string; status: string; data?: unknown }) => {
+      if (!requireRoom(roomId) || !["driver", "admin"].includes(user.role)) return;
       io.to(roomId).emit("trip_status_update", { status, data, time: new Date().toISOString() });
     });
 
-    // ── WebRTC Voice Call Signaling ────────────────────────────────────────────
-    // call_offer: caller sends SDP offer to the other party in the room
-    socket.on("call_offer", ({ roomId, offer, from, callerName }: { roomId: string; offer: RTCSessionDescriptionInit; from: string; callerName: string }) => {
-      socket.to(roomId).emit("call_incoming", { offer, from, callerName });
+    socket.on("call_offer", ({ roomId, offer }: { roomId: string; offer: RTCSessionDescriptionInit }) => {
+      if (requireRoom(roomId)) socket.to(roomId).emit("call_incoming", { offer, from: String(user.id), callerName: user.name });
     });
-
-    // call_answer: callee sends SDP answer back to caller
-    socket.on("call_answer", ({ roomId, answer, from }: { roomId: string; answer: RTCSessionDescriptionInit; from: string }) => {
-      socket.to(roomId).emit("call_answered", { answer, from });
+    socket.on("call_answer", ({ roomId, answer }: { roomId: string; answer: RTCSessionDescriptionInit }) => {
+      if (requireRoom(roomId)) socket.to(roomId).emit("call_answered", { answer, from: String(user.id) });
     });
-
-    // call_ice: exchange ICE candidates
-    socket.on("call_ice", ({ roomId, candidate, from }: { roomId: string; candidate: RTCIceCandidateInit; from: string }) => {
-      socket.to(roomId).emit("call_ice_candidate", { candidate, from });
+    socket.on("call_ice", ({ roomId, candidate }: { roomId: string; candidate: RTCIceCandidateInit }) => {
+      if (requireRoom(roomId)) socket.to(roomId).emit("call_ice_candidate", { candidate, from: String(user.id) });
     });
-
-    // call_end: either party hangs up
-    socket.on("call_end", ({ roomId, from }: { roomId: string; from: string }) => {
-      socket.to(roomId).emit("call_ended", { from });
+    socket.on("call_end", ({ roomId }: { roomId: string }) => {
+      if (requireRoom(roomId)) socket.to(roomId).emit("call_ended", { from: String(user.id) });
     });
-
-    // call_reject: callee rejects incoming call
-    socket.on("call_reject", ({ roomId, from }: { roomId: string; from: string }) => {
-      socket.to(roomId).emit("call_rejected", { from });
-    });
-
-    socket.on("disconnect", () => {
-      console.log(`[Socket.io] Client disconnected: ${socket.id}`);
+    socket.on("call_reject", ({ roomId }: { roomId: string }) => {
+      if (requireRoom(roomId)) socket.to(roomId).emit("call_rejected", { from: String(user.id) });
     });
   });
 
   // Expose io for use in routes if needed
   (app as any).io = io;
+  (app as any).telemetry = telemetry;
+  app.locals.telemetry = telemetry;
 
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));

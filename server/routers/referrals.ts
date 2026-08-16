@@ -179,7 +179,7 @@ export const referralsRouter = router({
       return { success: true };
     }),
 
-  getDispatcherByUserId: publicProcedure
+  getDispatcherByUserId: adminProcedure
     .input(z.object({ userId: z.number() }))
     .query(async ({ input }) => {
       const rows = await rawQuery<any>(`SELECT * FROM dispatchers WHERE userId = ? AND status = 'active' LIMIT 1`, [input.userId]);
@@ -189,7 +189,7 @@ export const referralsRouter = router({
     }),
 
   /** Get dispatcher by email (used in login redirect) */
-  getDispatcherByEmail: publicProcedure
+  getDispatcherByEmail: adminProcedure
     .input(z.object({ email: z.string().email() }))
     .query(async ({ input }) => {
       const rows = await rawQuery<any>(`SELECT * FROM dispatchers WHERE email = ? LIMIT 1`, [input.email]);
@@ -198,7 +198,7 @@ export const referralsRouter = router({
       return { ...r, permissions: r.permissions ? JSON.parse(r.permissions) : {} };
     }),
 
-  logDispatcherAction: publicProcedure
+  logDispatcherAction: adminProcedure
     .input(z.object({
       dispatcherId: z.number(),
       action: z.string(),

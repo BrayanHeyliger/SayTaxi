@@ -89,57 +89,15 @@ export default function LeafletMap({ height = "100%", onMapReady, className = ""
       map.setView([19.4326, -99.1332], 13);
       mapRef.current = map;
 
-      // Auto-locate only if geolocation permission is already granted.
-      const initWithFallback = () => spawnVehiclesInternal(L, map, 19.4326, -99.1332);
-      if (navigator.geolocation && navigator.permissions) {
-        navigator.permissions
-          .query({ name: "geolocation" })
-          .then((permission) => {
-            if (permission.state !== "granted") {
-              initWithFallback();
-              return;
-            }
-            navigator.geolocation?.getCurrentPosition(
-              (pos) => {
-                map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-                const marker = L.marker([pos.coords.latitude, pos.coords.longitude], {
-                  icon: L.divIcon({ html: '<div style="width:14px;height:14px;background:#25D366;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(37,211,102,0.5)"></div>', className: "", iconAnchor: [7, 7] }),
-                }).addTo(map).bindPopup("📍 Tu ubicación");
-                pickupMarkerRef.current = marker;
-                spawnVehiclesInternal(L, map, pos.coords.latitude, pos.coords.longitude);
-              },
-              initWithFallback
-            );
-          })
-          .catch(initWithFallback);
-      } else {
-        initWithFallback();
-      }
-
-      setReady(true);
-
-      const spawnVehiclesInternal = (L: any, map: any, lat: number, lng: number) => {
+      // Este componente se usa en un contexto operativo: nunca crea vehículos ficticios.
+      const clearDemoVehicles = () => {
         vehicleMarkersRef.current.forEach(m => m.remove());
         vehicleMarkersRef.current = [];
-        const types = ["🚗","🚙","🚘","🚐"];
-        for (let i = 0; i < 8; i++) {
-          const spread = 0.012;
-          const vLat = lat + (Math.random() - 0.5) * spread;
-          const vLng = lng + (Math.random() - 0.5) * spread;
-          const emoji = types[i % types.length];
-          const m = L.marker([vLat, vLng], {
-            icon: L.divIcon({ html: `<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${emoji}</div>`, className: "", iconAnchor: [11, 11] }),
-          }).addTo(map);
-          vehicleMarkersRef.current.push(m);
-        }
         if (vehicleAnimRef.current) clearInterval(vehicleAnimRef.current);
-        vehicleAnimRef.current = setInterval(() => {
-          vehicleMarkersRef.current.forEach(m => {
-            const pos = m.getLatLng();
-            m.setLatLng([pos.lat + (Math.random() - 0.5) * 0.0003, pos.lng + (Math.random() - 0.5) * 0.0003]);
-          });
-        }, 1500);
+        vehicleAnimRef.current = null;
       };
+      const spawnVehiclesInternal = (_L?: any, _map?: any, _lat?: number, _lng?: number) => clearDemoVehicles();
+      setReady(true);
 
       const renderDrivers = (drivers: DriverMarker[]) => {
         if (!L || !map) return;

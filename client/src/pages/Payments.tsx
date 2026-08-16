@@ -92,12 +92,9 @@ export default function Payments() {
     }
     setLoadingPlan(plan.id);
     if (paymentMethod === "stripe") {
-      createCheckout.mutate({ planId: plan.id, planName: plan.name, amount: plan.price });
+      createCheckout.mutate({ planId: plan.id as "basic" | "pro" | "enterprise" });
     } else {
-      // PayPal redirect
-      const paypalUrl = `https://www.paypal.com/checkoutnow?amount=${plan.price}&currency=USD&description=Passenger+${plan.name}`;
-      window.open(paypalUrl, "_blank");
-      toast.success("Redirigiendo a PayPal...");
+      toast.error("PayPal aún no está integrado de forma segura. Selecciona Stripe para continuar.");
       setLoadingPlan(null);
     }
   };
@@ -213,7 +210,7 @@ export default function Payments() {
         {/* Test info */}
         <div className="mt-8 p-4 bg-white/5 border border-white/10 rounded-xl text-center">
           <p className="text-white/50 text-xs">
-            🧪 Modo de prueba activo. Usa la tarjeta <strong className="text-white/70">4242 4242 4242 4242</strong> para probar pagos con Stripe.
+              Los cobros se procesan mediante Stripe. El importe se valida en el servidor antes de crear el checkout.
           </p>
         </div>
 

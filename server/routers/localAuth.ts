@@ -3,15 +3,13 @@ import { publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, clients, drivers } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { createHash } from "node:crypto";
 import { ENV } from "../_core/env";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { sdk } from "../_core/sdk";
+import { hashPassword, verifyPassword } from "../_core/passwords";
 
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
+const credentialError = "Credenciales incorrectas";
 
 export const localAuthRouter = router({
   login: publicProcedure
@@ -22,7 +20,8 @@ export const localAuthRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
-      // Check for super admin via environment variables (avoid hardcoded creds)
+      // The emergency super-admin account remains environment-controlled and is
+      // intentionally separate from public registration.
       if (
         ENV.superAdminEmail &&
         ENV.superAdminPassword &&
@@ -31,10 +30,18 @@ export const localAuthRouter = router({
       ) {
         const openId = `local_admin_${input.email}`;
         if (db) {
-          // Ensure super admin user exists in DB
           const [existing] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
           if (!existing) {
-            await db.insert(users).values({ openId, name: "Super Admin", email: input.email, role: "admin", loginMethod: "local" });
+            await db.insert(users).values({
+              openId,
+              name: "Super Admin",
+              email: input.email,
+              role: "admin",
+              loginMethod: "local",
+              isActive: true,
+            });
+          } else if (!existing.isActive) {
+            throw new Error("Cuenta de administrador desactivada");
           }
         }
 
@@ -47,19 +54,14 @@ export const localAuthRouter = router({
 
       if (!db) throw new Error("Base de datos no disponible");
 
-      // Find user by email
       const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
-      if (!user) throw new Error("Credenciales incorrectas");
+      if (!user || !user.isActive || !user.passwordHash) throw new Error(credentialError);
 
-      // Verify password hash
-      const storedHash = (user as any).passwordHash;
-      if (storedHash) {
-        const inputHash = hashPassword(input.password);
-        if (storedHash !== inputHash) throw new Error("Credenciales incorrectas");
+      if (!(await verifyPassword(input.password, user.passwordHash))) {
+        throw new Error(credentialError);
       }
-      // Create session cookie for authenticated user
-      const userOpenId = (user as any).openId as string;
-      const sessionToken = await sdk.createSessionToken(userOpenId, { name: user.name || "", expiresInMs: ONE_YEAR_MS });
+
+      const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name || "", expiresInMs: ONE_YEAR_MS });
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
@@ -67,47 +69,46 @@ export const localAuthRouter = router({
         id: user.id,
         name: user.name || "Usuario",
         email: user.email || "",
-        role: user.role as "user" | "admin" | "client" | "driver",
+        role: user.role,
         phone: user.phone ?? undefined,
       };
     }),
 
   register: publicProcedure
     .input(z.object({
-      firstName: z.string().min(1),
-      lastName: z.string().optional(),
+      firstName: z.string().trim().min(1).max(100),
+      lastName: z.string().trim().max(100).optional(),
       email: z.string().email(),
-      phone: z.string().min(1),
-      password: z.string().min(6),
+      phone: z.string().trim().min(7).max(20),
+      password: z.string().min(12, "La contraseña debe tener al menos 12 caracteres").max(128),
+      // Public registration must never create an administrator.
       role: z.enum(["client", "driver", "fleet"]),
-      // Driver fields
-      licenseNumber: z.string().optional(),
-      vehicleMake: z.string().optional(),
-      vehicleModel: z.string().optional(),
-      vehiclePlate: z.string().optional(),
-      // Fleet fields
-      companyName: z.string().optional(),
+      licenseNumber: z.string().trim().max(50).optional(),
+      vehicleMake: z.string().trim().max(100).optional(),
+      vehicleModel: z.string().trim().max(100).optional(),
+      vehiclePlate: z.string().trim().max(20).optional(),
+      companyName: z.string().trim().max(200).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Base de datos no disponible");
 
-      const hashedPassword = hashPassword(input.password);
-      const role = input.role === "fleet" ? "admin" : (input.role as "client" | "driver");
+      const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1);
+      if (existing) throw new Error("Ya existe una cuenta con este correo");
 
-      // Create user
+      const passwordHash = await hashPassword(input.password);
       const [result] = await db.insert(users).values({
-        openId: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        openId: `local_${crypto.randomUUID()}`,
         name: `${input.firstName} ${input.lastName || ""}`.trim(),
         email: input.email,
         phone: input.phone,
-        role: role as "user" | "admin" | "client" | "driver",
+        passwordHash,
+        role: input.role,
         loginMethod: "local",
+        isActive: true,
       }).$returningId();
 
       const userId = result.id;
-
-      // Create role-specific profile
       if (input.role === "client") {
         await db.insert(clients).values({
           userId,
@@ -117,13 +118,15 @@ export const localAuthRouter = router({
           phone: input.phone,
         });
       } else if (input.role === "driver") {
+        if (!input.licenseNumber) throw new Error("La licencia es obligatoria para registrar un conductor");
         await db.insert(drivers).values({
           userId,
           firstName: input.firstName,
           lastName: input.lastName || null,
           email: input.email,
           phone: input.phone,
-          licenseNumber: input.licenseNumber || `DL-${Date.now()}`,
+          licenseNumber: input.licenseNumber,
+          status: "pending",
         });
       }
 
@@ -131,7 +134,7 @@ export const localAuthRouter = router({
         id: userId,
         name: `${input.firstName} ${input.lastName || ""}`.trim(),
         email: input.email,
-        role: input.role as "client" | "driver" | "fleet",
+        role: input.role,
       };
     }),
 });

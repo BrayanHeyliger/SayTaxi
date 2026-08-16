@@ -19,6 +19,13 @@ export const ENV = {
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
+  appUrl: process.env.APP_URL ?? "http://localhost:3000",
+  redisUrl: process.env.REDIS_URL ?? "",
+  telemetryEnabled: toBool(process.env.TELEMETRY_ENABLED, false),
+  allowedOrigins: (process.env.ALLOWED_ORIGINS ?? process.env.APP_URL ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   // Codeium / other external LLM provider support

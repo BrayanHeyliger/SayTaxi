@@ -3,6 +3,7 @@ import FAQEditor from "@/components/FAQEditor";
 import { AdminParcelStats } from "@/components/AdminParcelStats";
 import { useNotificationHistory } from "@/hooks/useNotificationHistory";
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useAdminLiveTracking } from "@/hooks/useAdminLiveTracking";
 import { useLocation } from "wouter";
 import MessagesInbox from "@/components/MessagesInbox";
 import { trpc } from "@/lib/trpc";
@@ -107,22 +108,58 @@ export default function AdminDashboard() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [search, setSearch] = useState("");
-  const [drivers, setDrivers] = useState<Driver[]>(MOCK_DRIVERS);
-  const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const { config: globalConfig, saveConfig: saveGlobalConfig } = useSiteConfig();
   const { isSaving, lastSaved } = useSiteConfig();
   const [siteConfig, setSiteConfig] = useState(defaultSiteConfig);
   const [editorView, setEditorView] = useState<EditorView>("form");
   const [previewKey, setPreviewKey] = useState(0);
 
-  // Query for completed trips today
+  // Datos operativos persistentes, recargados periódicamente para el panel.
   const { data: completedTripsTodayData, isLoading: loadingCompleted } = trpc.adminDashboard.completedTripsToday.useQuery(undefined, { refetchInterval: 15000 });
-  const [completedTripsToday, setCompletedTripsToday] = useState<CompletedTripRow[]>((completedTripsTodayData ?? []) as unknown as CompletedTripRow[]);
   const { data: activeDriversData, isLoading: loadingDrivers } = trpc.adminDashboard.activeDrivers.useQuery(undefined, { refetchInterval: 10000 });
   const { data: activeTripsData, isLoading: loadingTrips } = trpc.adminDashboard.activeTrips.useQuery(undefined, { refetchInterval: 10000 });
+  const { data: driversData, refetch: refetchDrivers } = trpc.adminOperations.listDrivers.useQuery(undefined, { refetchInterval: 15000 });
+  const { data: clientsData, refetch: refetchClients } = trpc.adminOperations.listClients.useQuery(undefined, { refetchInterval: 15000 });
+  const updateDriverStatus = trpc.adminOperations.updateDriverStatus.useMutation();
+  const updateDriverPermissions = trpc.adminOperations.updateDriverPermissions.useMutation();
+  const updateClientStatus = trpc.adminOperations.updateClientStatus.useMutation();
 
-  const [activeDrivers, setActiveDrivers] = useState<ActiveDriverRow[]>((activeDriversData ?? []) as unknown as ActiveDriverRow[]);
-  const [activeTrips, setActiveTrips] = useState<ActiveTripRow[]>((activeTripsData ?? []) as unknown as ActiveTripRow[]);
+  const [completedTripsToday, setCompletedTripsToday] = useState<CompletedTripRow[]>([]);
+  const [activeDrivers, setActiveDrivers] = useState<ActiveDriverRow[]>([]);
+  const [activeTrips, setActiveTrips] = useState<ActiveTripRow[]>([]);
+  const { markers: liveFleetMarkers, connectionState: liveTrackingState, lastUpdateAt: liveTrackingUpdatedAt } = useAdminLiveTracking(activeTab === "godsEye" && user?.role === "admin");
+
+  useEffect(() => { setCompletedTripsToday((completedTripsTodayData ?? []) as unknown as CompletedTripRow[]); }, [completedTripsTodayData]);
+  useEffect(() => { setActiveDrivers((activeDriversData ?? []) as unknown as ActiveDriverRow[]); }, [activeDriversData]);
+  useEffect(() => { setActiveTrips((activeTripsData ?? []) as unknown as ActiveTripRow[]); }, [activeTripsData]);
+  useEffect(() => {
+    if (!driversData) return;
+    setDrivers((driversData as any[]).map((driver) => ({
+      id: String(driver.id),
+      name: `${driver.firstName} ${driver.lastName ?? ""}`.trim(),
+      phone: driver.phone ?? "",
+      email: driver.email ?? "",
+      vehicle: driver.vehicle?.trim() || "Sin vehículo asignado",
+      plate: driver.plate ?? "—",
+      status: driver.status,
+      rating: Number(driver.rating ?? 0),
+      trips: Number(driver.trips ?? 0),
+      earnings: `$${Number(driver.earnings ?? 0).toFixed(2)}`,
+      joinDate: String(driver.joinDate ?? ""),
+      online: Boolean(driver.online),
+      permissions: { canAcceptTrips: true, canSetOwnFare: false, canViewClientPhone: true, canCancelTrip: true, ...(typeof driver.permissions === "string" ? JSON.parse(driver.permissions || "{}") : driver.permissions) },
+    })));
+  }, [driversData]);
+  useEffect(() => {
+    if (!clientsData) return;
+    setClients((clientsData as any[]).map((client) => ({
+      id: String(client.id), name: client.name ?? "", phone: client.phone ?? "", email: client.email ?? "",
+      trips: Number(client.trips ?? 0), spent: `$${Number(client.spent ?? 0).toFixed(2)}`,
+      rating: Number(client.rating ?? 0), joinDate: String(client.joinDate ?? ""), status: client.status,
+    })));
+  }, [clientsData]);
 
   // Sync local editor state from global config on mount
   useEffect(() => {
@@ -156,10 +193,7 @@ export default function AdminDashboard() {
   };
 
   const [messageForm, setMessageForm] = useState({ to: "all_clients", subject: "", body: "", channel: "push" });
-  const [sentMessages, setSentMessages] = useState<SentMessage[]>([
-    { id: "m1", to: "all_clients", subject: "¡Bienvenido a WhatsApp Taxi!", body: "Gracias por registrarte.", channel: "push", date: "Hoy 09:00" },
-    { id: "m2", to: "all_drivers", subject: "Actualización de tarifas", body: "Las tarifas se han actualizado.", channel: "email", date: "Ayer 14:30" },
-  ]);
+  const [sentMessages] = useState<SentMessage[]>([]);
   const [editorSection, setEditorSection] = useState<EditorSection>("hero");
   const mapRef = useRef<LeafletMapRef | null>(null);
 
@@ -167,17 +201,12 @@ export default function AdminDashboard() {
 
   const handleMapReady = useCallback((ref: LeafletMapRef) => {
     mapRef.current = ref;
-    // Fallback: if no real drivers with location are available, show demo vehicles
-    const located = activeDrivers.filter(d => d.currentLocation?.lat != null && d.currentLocation?.lng != null);
-    if (located.length === 0) {
-      ref.spawnVehicles(19.4326, -99.1332);
-    }
-  }, [activeDrivers]);
+  }, []);
 
-  // Sync live driver markers to the map whenever activeDrivers change
+  // Snapshot HTTP como respaldo; WebSocket sustituye posiciones de taxis con viajes activos.
   useEffect(() => {
     if (!mapRef.current) return;
-    const markers = activeDrivers.map(d => ({
+    const fallbackMarkers = activeDrivers.map(d => ({
       id: d.id,
       name: `${d.firstName} ${d.lastName ?? ""}`.trim(),
       vehicle: d.vehicle,
@@ -186,38 +215,55 @@ export default function AdminDashboard() {
       lat: d.currentLocation?.lat ?? null,
       lng: d.currentLocation?.lng ?? null,
     }));
-    const located = markers.filter(m => m.lat != null && m.lng != null);
-    if (located.length > 0) {
-      mapRef.current.setDrivers(markers);
+    const liveMarkers = liveFleetMarkers.map(marker => ({
+      id: `live-${marker.driverId}`,
+      name: marker.driverName,
+      vehicle: `${marker.vehicleLabel}${marker.licensePlate ? ` · ${marker.licensePlate}` : ""}`,
+      status: marker.stale ? "inactive" : marker.tripStatus,
+      isOnline: !marker.stale,
+      lat: marker.position.lat,
+      lng: marker.position.lng,
+    }));
+    const markers = liveMarkers.length ? liveMarkers : fallbackMarkers;
+    if (markers.some(marker => marker.lat != null && marker.lng != null)) mapRef.current.setDrivers(markers);
+  }, [activeDrivers, liveFleetMarkers]);
+
+  const handleDriverAction = async (driverId: string, action: "approve" | "suspend" | "activate" | "delete") => {
+    const status = action === "approve" || action === "activate" ? "active" : action === "suspend" ? "suspended" : "inactive";
+    try {
+      await updateDriverStatus.mutateAsync({ driverId: Number(driverId), status });
+      await refetchDrivers();
+      toast.success({ approve: "Conductor aprobado", suspend: "Conductor suspendido", activate: "Conductor activado", delete: "Conductor desactivado" }[action]);
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo actualizar el conductor");
     }
-  }, [activeDrivers]);
-
-  const handleDriverAction = (driverId: string, action: "approve" | "suspend" | "activate" | "delete") => {
-    setDrivers(prev => prev.map(d => {
-      if (d.id !== driverId) return d;
-      if (action === "approve") return { ...d, status: "active" as const };
-      if (action === "suspend") return { ...d, status: "suspended" as const, online: false };
-      if (action === "activate") return { ...d, status: "active" as const };
-      return d;
-    }).filter(d => action === "delete" ? d.id !== driverId : true));
-    toast.success({ approve: "Conductor aprobado ✅", suspend: "Conductor suspendido", activate: "Conductor activado ✅", delete: "Conductor eliminado" }[action]);
   };
 
-  const handlePermissionToggle = (driverId: string, perm: keyof Driver["permissions"]) => {
-    setDrivers(prev => prev.map(d => d.id !== driverId ? d : { ...d, permissions: { ...d.permissions, [perm]: !d.permissions[perm] } }));
-    toast.success("Permiso actualizado");
+  const handlePermissionToggle = async (driverId: string, perm: keyof Driver["permissions"]) => {
+    const driver = drivers.find((item) => item.id === driverId);
+    if (!driver) return;
+    try {
+      await updateDriverPermissions.mutateAsync({ driverId: Number(driverId), permissions: { ...driver.permissions, [perm]: !driver.permissions[perm] } });
+      await refetchDrivers();
+      toast.success("Permiso actualizado");
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo actualizar el permiso");
+    }
   };
 
-  const handleClientAction = (clientId: string, action: "suspend" | "activate") => {
-    setClients(prev => prev.map(c => c.id !== clientId ? c : { ...c, status: action === "suspend" ? "suspended" as const : "active" as const }));
-    toast.success(action === "suspend" ? "Cliente suspendido" : "Cliente activado ✅");
+  const handleClientAction = async (clientId: string, action: "suspend" | "activate") => {
+    try {
+      await updateClientStatus.mutateAsync({ clientId: Number(clientId), status: action === "suspend" ? "suspended" : "active" });
+      await refetchClients();
+      toast.success(action === "suspend" ? "Cliente suspendido" : "Cliente activado");
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo actualizar el cliente");
+    }
   };
 
   const handleSendMessage = () => {
     if (!messageForm.subject || !messageForm.body) { toast.error("Completa el asunto y el mensaje"); return; }
-    setSentMessages(prev => [{ id: `m${Date.now()}`, to: messageForm.to, subject: messageForm.subject, body: messageForm.body, channel: messageForm.channel, date: new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
-    setMessageForm({ to: "all_clients", subject: "", body: "", channel: "push" });
-    toast.success("Mensaje enviado ✅");
+    toast.error("No se envió el mensaje: configura un proveedor de correo, push o WhatsApp antes de habilitar campañas.");
   };
 
   const handleSaveConfig = () => {
@@ -360,7 +406,8 @@ export default function AdminDashboard() {
           {activeTab === "godsEye" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div><h2 className="text-lg font-bold text-slate-900">God's Eye — Mapa en Tiempo Real</h2><p className="text-sm text-slate-500">Todos los conductores activos en tiempo real</p></div>
+                <div><h2 className="text-lg font-bold text-slate-900">God's Eye — Mapa en Tiempo Real</h2><p className="text-sm text-slate-500">Taxis con viajes activos y señal GPS verificada</p></div>
+                <div className={`text-xs font-semibold px-2.5 py-1 rounded-full ${liveTrackingState === "live" ? "bg-emerald-100 text-emerald-700" : liveTrackingState === "forbidden" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>{liveTrackingState === "live" ? "● En vivo" : liveTrackingState === "reconnecting" ? "Reconectando" : liveTrackingState === "forbidden" ? "Sin permiso" : "Conectando"}</div>
                 <div className="flex gap-3 text-xs">
                   {[{ color: "bg-green-500", label: "Disponible" }, { color: "bg-blue-500", label: "En viaje" }, { color: "bg-slate-400", label: "Inactivo" }, { color: "bg-red-500", label: "Suspendido" }].map(s => (
                     <div key={s.label} className="flex items-center gap-1.5"><div className={`w-2.5 h-2.5 rounded-full ${s.color}`} /><span className="text-slate-600">{s.label}</span></div>
@@ -389,7 +436,9 @@ export default function AdminDashboard() {
                   <Card className="p-4">
                     <h3 className="font-semibold text-slate-900 text-sm mb-2">Estadísticas Live</h3>
                     <div className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span className="text-slate-500">En seguimiento</span><span className="font-bold text-blue-600">{liveFleetMarkers.length}</span></div>
                       <div className="flex justify-between"><span className="text-slate-500">En línea</span><span className="font-bold text-green-600">{activeDrivers.filter(d => d.isOnline).length}</span></div>
+                      {liveTrackingUpdatedAt && <div className="text-xs text-slate-400 pt-1">GPS actualizado {new Date(liveTrackingUpdatedAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</div>}
                       <div className="flex justify-between"><span className="text-slate-500">Pendientes</span><span className="font-bold text-yellow-600">{activeDrivers.filter(d => d.status === "pending").length}</span></div>
                       <div className="flex justify-between"><span className="text-slate-500">Suspendidos</span><span className="font-bold text-red-600">{activeDrivers.filter(d => d.status === "suspended").length}</span></div>
                     </div>
@@ -1061,7 +1110,7 @@ export default function AdminDashboard() {
           {/* ── FAQ EDITOR ── */}
           {/* ── RESERVA MANUAL ── */}
           {activeTab === "manualBooking" && (
-            <ManualBookingPanel drivers={drivers} />
+            <ManualBookingPanel drivers={drivers} clients={clients} />
           )}
 
           {/* ── SURGE PRICING ── */}
@@ -1522,153 +1571,121 @@ function DispatcherAdminPanel() {
 }
 
 // ── MANUAL BOOKING PANEL ─────────────────────────────────────────────────────
-function ManualBookingPanel({ drivers }: { drivers: any[] }) {
-  const [form, setForm] = useState({
-    clientName: "", clientPhone: "", pickup: "", dropoff: "",
-    vehicleType: "economy", scheduledAt: "", notes: "", driverId: "",
-  });
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+function ManualBookingPanel({ drivers, clients }: { drivers: Driver[]; clients: Client[] }) {
+  const [form, setForm] = useState({ clientId: "", pickup: "", dropoff: "", vehicleType: "economy", scheduledAt: "", notes: "", driverId: "" });
+  const { data: bookings = [], refetch } = trpc.adminOperations.listManualBookings.useQuery();
+  const createBooking = trpc.adminOperations.createManualBooking.useMutation();
 
   const vehicleTypes = [
-    { id: "economy", label: "🚗 Económico", price: "$8–$15" },
-    { id: "comfort", label: "🚙 Confort", price: "$12–$22" },
-    { id: "premium", label: "🏎️ Premium", price: "$20–$40" },
-    { id: "suv", label: "🚐 SUV", price: "$25–$50" },
+    { id: "economy", label: "Económico", fare: 12 },
+    { id: "comfort", label: "Confort", fare: 18 },
+    { id: "premium", label: "Premium", fare: 30 },
+    { id: "suv", label: "SUV", fare: 38 },
   ];
 
-  const handleSubmit = () => {
-    if (!form.clientName || !form.clientPhone || !form.pickup || !form.dropoff) {
-      toast.error("Completa los campos obligatorios");
-      return;
-    }
-    setLoading(true);
-    setTimeout(() => {
-      const newBooking = {
-        id: `MB-${Date.now()}`,
-        ...form,
-        status: form.driverId ? "assigned" : "pending",
-        createdAt: new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }),
-        driver: form.driverId ? drivers.find(d => d.id === form.driverId)?.name || "—" : "Sin asignar",
-      };
-      setBookings(prev => [newBooking, ...prev]);
-      setForm({ clientName: "", clientPhone: "", pickup: "", dropoff: "", vehicleType: "economy", scheduledAt: "", notes: "", driverId: "" });
-      setLoading(false);
-      toast.success(`✅ Reserva ${newBooking.id} creada${form.driverId ? " y asignada" : " — pendiente de conductor"}`);
-    }, 800);
+  const geocodeAddress = async (address: string) => {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`, { headers: { "Accept-Language": "es" } });
+    if (!response.ok) throw new Error("No se pudo validar la dirección");
+    const results = await response.json();
+    const first = results[0];
+    if (!first) throw new Error(`No se encontró la dirección: ${address}`);
+    return { lat: Number(first.lat), lng: Number(first.lon) };
   };
 
-  const statusColors: Record<string, string> = { pending: "bg-yellow-100 text-yellow-700", assigned: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700", cancelled: "bg-red-100 text-red-700" };
-  const statusLabels: Record<string, string> = { pending: "Pendiente", assigned: "Asignado", completed: "Completado", cancelled: "Cancelado" };
+  const handleSubmit = async () => {
+    if (!form.clientId || !form.pickup || !form.dropoff) {
+      toast.error("Selecciona un cliente e ingresa los puntos de recogida y destino");
+      return;
+    }
+
+    try {
+      const [pickup, dropoff] = await Promise.all([geocodeAddress(form.pickup), geocodeAddress(form.dropoff)]);
+      const selectedVehicle = vehicleTypes.find((vehicle) => vehicle.id === form.vehicleType) ?? vehicleTypes[0];
+      const result = await createBooking.mutateAsync({
+        clientId: Number(form.clientId),
+        driverId: form.driverId ? Number(form.driverId) : undefined,
+        pickupLocation: form.pickup,
+        pickupLat: pickup.lat,
+        pickupLng: pickup.lng,
+        dropoffLocation: form.dropoff,
+        dropoffLat: dropoff.lat,
+        dropoffLng: dropoff.lng,
+        fare: selectedVehicle.fare,
+        paymentMethod: "cash",
+        internalNotes: form.notes || undefined,
+        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined,
+      });
+      await refetch();
+      setForm({ clientId: "", pickup: "", dropoff: "", vehicleType: "economy", scheduledAt: "", notes: "", driverId: "" });
+      toast.success(result.status === "accepted" ? "Reserva creada y asignada" : "Reserva creada y pendiente de asignación");
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo crear la reserva");
+    }
+  };
+
+  const statusColors: Record<string, string> = { requested: "bg-yellow-100 text-yellow-700", accepted: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700", cancelled: "bg-red-100 text-red-700" };
+  const statusLabels: Record<string, string> = { requested: "Pendiente", accepted: "Asignado", completed: "Completado", cancelled: "Cancelado" };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-slate-900">Reserva Manual de Viaje</h2>
-        <p className="text-sm text-slate-500 mt-1">Crea viajes manualmente para clientes que llaman por teléfono o no pueden usar la app</p>
+        <p className="text-sm text-slate-500 mt-1">Crea un viaje persistente para un cliente registrado y asígnalo a un conductor disponible.</p>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Form */}
         <Card className="p-6 space-y-4">
           <h3 className="font-semibold text-slate-900 flex items-center gap-2"><Phone size={16} className="text-green-600" /> Datos del viaje</h3>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Nombre del cliente *</label>
-              <input value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} placeholder="Ej: María García" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Teléfono *</label>
-              <input value={form.clientPhone} onChange={e => setForm(f => ({ ...f, clientPhone: e.target.value }))} placeholder="+1 407 000 0000" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
-            </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Cliente registrado *</label>
+            <select value={form.clientId} onChange={(event) => setForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none">
+              <option value="">Selecciona un cliente</option>
+              {clients.filter((client) => client.status === "active").map((client) => <option key={client.id} value={client.id}>{client.name} — {client.phone}</option>)}
+            </select>
+            {clients.length === 0 && <p className="mt-1 text-xs text-amber-700">No hay clientes activos disponibles en la base de datos.</p>}
           </div>
-
           <div>
             <label className="text-xs font-medium text-slate-600 mb-1 block">Dirección de recogida *</label>
-            <input value={form.pickup} onChange={e => setForm(f => ({ ...f, pickup: e.target.value }))} placeholder="Ej: Calle 5 #123, Centro" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+            <input value={form.pickup} onChange={(event) => setForm((current) => ({ ...current, pickup: event.target.value }))} placeholder="Ej: Calle 5 #123, Centro" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
           </div>
-
           <div>
             <label className="text-xs font-medium text-slate-600 mb-1 block">Destino *</label>
-            <input value={form.dropoff} onChange={e => setForm(f => ({ ...f, dropoff: e.target.value }))} placeholder="Ej: Aeropuerto Internacional" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+            <input value={form.dropoff} onChange={(event) => setForm((current) => ({ ...current, dropoff: event.target.value }))} placeholder="Ej: Aeropuerto Internacional" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
           </div>
-
           <div>
-            <label className="text-xs font-medium text-slate-600 mb-1 block">Tipo de vehículo</label>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Categoría y tarifa inicial</label>
             <div className="grid grid-cols-2 gap-2">
-              {vehicleTypes.map(v => (
-                <button key={v.id} onClick={() => setForm(f => ({ ...f, vehicleType: v.id }))}
-                  className={`p-2.5 rounded-xl border text-left transition-colors ${form.vehicleType === v.id ? "border-green-500 bg-green-50" : "border-slate-200 hover:bg-slate-50"}`}>
-                  <p className="text-sm font-medium text-slate-900">{v.label}</p>
-                  <p className="text-xs text-slate-500">{v.price}</p>
-                </button>
-              ))}
+              {vehicleTypes.map((vehicle) => <button key={vehicle.id} onClick={() => setForm((current) => ({ ...current, vehicleType: vehicle.id }))} className={`p-2.5 rounded-xl border text-left transition-colors ${form.vehicleType === vehicle.id ? "border-green-500 bg-green-50" : "border-slate-200 hover:bg-slate-50"}`}><p className="text-sm font-medium text-slate-900">{vehicle.label}</p><p className="text-xs text-slate-500">Tarifa base: ${vehicle.fare.toFixed(2)}</p></button>)}
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Programar para (opcional)</label>
-              <input type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+              <input type="datetime-local" value={form.scheduledAt} onChange={(event) => setForm((current) => ({ ...current, scheduledAt: event.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Asignar conductor (opcional)</label>
-              <select value={form.driverId} onChange={e => setForm(f => ({ ...f, driverId: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none">
-                <option value="">Auto-asignar</option>
-                {drivers.filter(d => d.status === "active" && d.online).map(d => (
-                  <option key={d.id} value={d.id}>{d.name} — {d.vehicle}</option>
-                ))}
+              <select value={form.driverId} onChange={(event) => setForm((current) => ({ ...current, driverId: event.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                <option value="">Pendiente de asignación</option>
+                {drivers.filter((driver) => driver.status === "active" && driver.online).map((driver) => <option key={driver.id} value={driver.id}>{driver.name} — {driver.vehicle}</option>)}
               </select>
             </div>
           </div>
-
           <div>
             <label className="text-xs font-medium text-slate-600 mb-1 block">Notas internas</label>
-            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ej: Cliente con silla de ruedas, necesita ayuda..." rows={2} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none resize-none" />
+            <textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Instrucciones para despacho" rows={2} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none resize-none" />
           </div>
-
-          <Button onClick={handleSubmit} disabled={loading} className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold gap-2">
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Creando reserva...</> : <><Phone size={16} /> Crear Reserva Manual</>}
+          <Button onClick={handleSubmit} disabled={createBooking.isPending || clients.length === 0} className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold gap-2">
+            {createBooking.isPending ? <><Loader2 size={16} className="animate-spin" /> Creando reserva...</> : <><Phone size={16} /> Crear reserva persistente</>}
           </Button>
         </Card>
 
-        {/* Recent bookings */}
         <div className="space-y-4">
-          <h3 className="font-semibold text-slate-900">Reservas Manuales Recientes</h3>
-          {bookings.length === 0 ? (
-            <Card className="p-8 text-center">
-              <Phone size={32} className="mx-auto text-slate-300 mb-3" />
-              <p className="text-slate-500 text-sm">No hay reservas manuales aún</p>
-              <p className="text-slate-400 text-xs mt-1">Las reservas creadas aquí aparecerán en esta lista</p>
-            </Card>
+          <h3 className="font-semibold text-slate-900">Reservas manuales recientes</h3>
+          {(bookings as any[]).length === 0 ? (
+            <Card className="p-8 text-center"><Phone size={32} className="mx-auto text-slate-300 mb-3" /><p className="text-slate-500 text-sm">No hay reservas manuales aún</p></Card>
           ) : (
-            <div className="space-y-3">
-              {bookings.map(b => (
-                <Card key={b.id} className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-semibold text-slate-900 text-sm">{b.clientName}</p>
-                      <p className="text-xs text-slate-500">{b.clientPhone}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[b.status]}`}>{statusLabels[b.status]}</span>
-                      <span className="text-xs text-slate-400">{b.createdAt}</span>
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-600 space-y-1">
-                    <p>📍 <strong>Recogida:</strong> {b.pickup}</p>
-                    <p>🏁 <strong>Destino:</strong> {b.dropoff}</p>
-                    <p>🚗 <strong>Vehículo:</strong> {vehicleTypes.find(v => v.id === b.vehicleType)?.label} · <strong>Conductor:</strong> {b.driver}</p>
-                    {b.notes && <p>📝 {b.notes}</p>}
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <button onClick={() => setBookings(prev => prev.map(x => x.id === b.id ? { ...x, status: "completed" } : x))} className="text-xs px-3 py-1.5 rounded-lg bg-green-100 text-green-700 font-medium hover:bg-green-200">✅ Completar</button>
-                    <button onClick={() => setBookings(prev => prev.map(x => x.id === b.id ? { ...x, status: "cancelled" } : x))} className="text-xs px-3 py-1.5 rounded-lg bg-red-100 text-red-700 font-medium hover:bg-red-200">❌ Cancelar</button>
-                  </div>
-                </Card>
-              ))}
-            </div>
+            <div className="space-y-3">{(bookings as any[]).map((booking) => <Card key={booking.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-slate-900">{booking.clientName}</p><p className="text-xs text-slate-500">{booking.clientPhone}</p></div><span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColors[booking.status] ?? "bg-slate-100 text-slate-600"}`}>{statusLabels[booking.status] ?? booking.status}</span></div><div className="mt-3 text-sm text-slate-600"><p>{booking.pickup} → {booking.dropoff}</p><p className="mt-1 text-xs">Conductor: {booking.driver || "Sin asignar"} · Tarifa: ${Number(booking.fare).toFixed(2)}</p>{booking.notes && <p className="mt-1 text-xs italic">{booking.notes}</p>}</div></Card>)}</div>
           )}
         </div>
       </div>

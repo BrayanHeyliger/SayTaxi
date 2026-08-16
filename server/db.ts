@@ -126,12 +126,15 @@ export async function rawQuery<T = Record<string, unknown>>(
 export async function rawMutate(
   sql: string,
   params: unknown[] = []
-): Promise<{ affectedRows: number }> {
+): Promise<{ affectedRows: number; insertId?: number }> {
   const pool = await getRawPool();
   if (!pool) return { affectedRows: 0 };
   try {
     const [result] = await (pool as any).execute(sql, params);
-    return { affectedRows: (result as mysql.ResultSetHeader).affectedRows ?? 0 };
+    return {
+      affectedRows: (result as mysql.ResultSetHeader).affectedRows ?? 0,
+      insertId: (result as mysql.ResultSetHeader).insertId || undefined,
+    };
   } catch (e) {
     console.error("[rawMutate] Error:", e);
     return { affectedRows: 0 };

@@ -22,6 +22,20 @@
       "when": 1786110132825,
       "tag": "0002_curved_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1786119000000,
+      "tag": "0003_secure_user_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1786903009000,
+      "tag": "0004_trip_telemetry",
+      "breakpoints": true
     }
   ]
 }

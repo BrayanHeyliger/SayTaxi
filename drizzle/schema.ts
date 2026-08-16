@@ -13,7 +13,9 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin", "client", "driver"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "client", "driver", "fleet", "dispatcher"]).default("user").notNull(),
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -70,6 +72,7 @@ export const drivers = mysqlTable("drivers", {
   paypalEmail: varchar("paypalEmail", { length: 320 }),
   currentLocation: json("currentLocation"), // { lat, lng }
   isOnline: boolean("isOnline").default(false),
+  permissions: json("permissions"),
   currentTrip: int("currentTrip"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -77,6 +80,23 @@ export const drivers = mysqlTable("drivers", {
 
 export type Driver = typeof drivers.$inferSelect;
 export type InsertDriver = typeof drivers.$inferInsert;
+
+// ===== DISPATCHERS (operational staff) =====
+export const dispatchers = mysqlTable("dispatchers", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  name: varchar("name", { length: 200 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  phone: varchar("phone", { length: 20 }),
+  status: mysqlEnum("status", ["active", "inactive", "suspended"]).default("active").notNull(),
+  permissions: json("permissions").notNull(),
+  assignedZone: varchar("assignedZone", { length: 200 }),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Dispatcher = typeof dispatchers.$inferSelect;
+export type InsertDispatcher = typeof dispatchers.$inferInsert;
 
 // ===== VEHICLES (Taxi Fleet) =====
 export const vehicles = mysqlTable("vehicles", {
@@ -116,6 +136,9 @@ export const trips = mysqlTable("trips", {
   fare: decimal("fare", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: mysqlEnum("paymentMethod", ["cash", "card", "paypal", "stripe"]).default("cash"),
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "completed", "failed"]).default("pending"),
+  source: mysqlEnum("source", ["client", "admin_manual", "dispatcher"]).default("client").notNull(),
+  internalNotes: text("internalNotes"),
+  scheduledAt: timestamp("scheduledAt"),
   requestedAt: timestamp("requestedAt").defaultNow().notNull(),
   acceptedAt: timestamp("acceptedAt"),
   startedAt: timestamp("startedAt"),
@@ -165,6 +188,35 @@ export const payments = mysqlTable("payments", {
 
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = typeof payments.$inferInsert;
+
+// ===== BILLING EVENTS (Stripe webhook audit trail) =====
+export const billingEvents = mysqlTable("billingEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  stripeEventId: varchar("stripeEventId", { length: 255 }).notNull().unique(),
+  userId: int("userId"),
+  eventType: varchar("eventType", { length: 120 }).notNull(),
+  status: varchar("status", { length: 80 }).notNull(),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  payload: text("payload").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BillingEvent = typeof billingEvents.$inferSelect;
+export type InsertBillingEvent = typeof billingEvents.$inferInsert;
+
+// ===== USER SUBSCRIPTIONS (billing access state) =====
+export const userSubscriptions = mysqlTable("userSubscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  planId: mysqlEnum("planId", ["basic", "pro", "enterprise"]).notNull(),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }).unique(),
+  status: varchar("status", { length: 80 }).notNull(),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type InsertUserSubscription = typeof userSubscriptions.$inferInsert;
 
 // ===== PRICING RULES (Fare Configuration) =====
 export const pricingRules = mysqlTable("pricingRules", {

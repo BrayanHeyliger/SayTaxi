@@ -1,28 +1,51 @@
-name: CI
+name: Validación de SayTaxi
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
-jobs:
-  build-test:
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+concurrency:
+  group: saytaxi-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tipos, pruebas y compilación
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
-      - name: Install pnpm
-        run: npm install -g pnpm@7
-      - name: Install dependencies
+          node-version: 22
+          cache: pnpm
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+          run_install: false
+
+      - name: Instalar dependencias bloqueadas
         run: pnpm install --frozen-lockfile
-      - name: Typecheck
+
+      - name: Comprobar formato del parche
+        run: git diff --check HEAD^ HEAD || true
+
+      - name: Comprobar tipos
         run: pnpm check
-      - name: Run tests
+
+      - name: Ejecutar pruebas
         run: pnpm test
-      - name: Build
+
+      - name: Compilar entrega de producción
         run: pnpm build
