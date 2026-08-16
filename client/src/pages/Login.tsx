@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Mail, Lock, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { useLocalAuth } from "@/contexts/LocalAuthContext";
+import { apiUrl } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 
 export default function Login() {
@@ -50,7 +51,7 @@ export default function Login() {
       } else {
         try {
           const res = await fetch(
-            `/api/trpc/referrals.getDispatcherByEmail?input=${encodeURIComponent(JSON.stringify({ json: { email } }))}`,
+            apiUrl(`/api/trpc/referrals.getDispatcherByEmail?input=${encodeURIComponent(JSON.stringify({ json: { email } }))}`),
             { credentials: "include" }
           );
           const data = await res.json();

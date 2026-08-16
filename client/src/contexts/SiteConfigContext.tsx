@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { apiUrl } from "@/lib/api";
 
 export interface SiteConfig {
   vehicles: Array<{ id: string; label: string; emoji: string; base: number; perKm: number; eta: string; seats: number; active: boolean }>;
@@ -151,7 +152,7 @@ function loadConfig(): SiteConfig {
 async function fetchConfigFromDB(): Promise<Partial<SiteConfig> | null> {
   try {
     const res = await fetch(
-      "/api/trpc/siteSettings.getConfig?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%7D%7D",
+      apiUrl("/api/trpc/siteSettings.getConfig?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%7D%7D"),
       { credentials: "include" }
     );
     if (!res.ok) return null;
@@ -165,7 +166,7 @@ async function fetchConfigFromDB(): Promise<Partial<SiteConfig> | null> {
 
 async function saveConfigToDB(cfg: SiteConfig): Promise<boolean> {
   try {
-    const res = await fetch("/api/trpc/siteSettings.saveConfig?batch=1", {
+    const res = await fetch(apiUrl("/api/trpc/siteSettings.saveConfig?batch=1"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

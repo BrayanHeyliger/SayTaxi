@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { apiUrl } from "@/lib/api";
 
 export type UserRole = "client" | "driver" | "fleet" | "admin" | "dispatcher";
 
@@ -40,7 +41,7 @@ const STORAGE_KEY = "wt_user";
 
 // Call tRPC via raw fetch to avoid React hook conflicts
 async function callTrpc(procedure: string, input: unknown): Promise<any> {
-  const res = await fetch("/api/trpc/" + procedure, {
+    const res = await fetch(apiUrl("/api/trpc/" + procedure), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

@@ -137,6 +137,24 @@ async function startServer() {
   const app = express();
   app.disable("x-powered-by");
   if (ENV.isProduction) app.set("trust proxy", 1);
+
+  const isAllowedOrigin = (origin: string | undefined) => !origin || ENV.allowedOrigins.includes(origin);
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      if (!isAllowedOrigin(origin)) {
+        return res.status(403).json({ error: "Origin not allowed" });
+      }
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+      res.setHeader("Vary", "Origin");
+    }
+    if (req.method === "OPTIONS") return res.status(204).end();
+    return next();
+  });
+
   const server = createServer(app);
 
   app.get("/healthz", async (_req, res) => {
@@ -152,7 +170,6 @@ async function startServer() {
   app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
 
   // ── Socket.io — authenticated, trip-scoped real-time events ────────────────
-  const isAllowedOrigin = (origin: string | undefined) => !origin || ENV.allowedOrigins.includes(origin);
   const io = new SocketIOServer(server, {
     cors: {
       origin: (origin, callback) => callback(isAllowedOrigin(origin) ? null : new Error("Origin not allowed"), isAllowedOrigin(origin)),

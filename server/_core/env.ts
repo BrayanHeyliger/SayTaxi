@@ -22,10 +22,12 @@ export const ENV = {
   appUrl: process.env.APP_URL ?? "http://localhost:3000",
   redisUrl: process.env.REDIS_URL ?? "",
   telemetryEnabled: toBool(process.env.TELEMETRY_ENABLED, false),
-  allowedOrigins: (process.env.ALLOWED_ORIGINS ?? process.env.APP_URL ?? "http://localhost:3000")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  allowedOrigins: Array.from(new Set([
+    process.env.APP_URL ?? "http://localhost:3000",
+    "https://saytaxi.netlify.app",
+    "https://main--saytaxi.netlify.app",
+    ...(process.env.ALLOWED_ORIGINS ?? "").split(","),
+  ].map((origin) => origin.trim()).filter(Boolean))),
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   // Codeium / other external LLM provider support
