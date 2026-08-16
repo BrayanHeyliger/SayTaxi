@@ -1,0 +1,44 @@
+name: Deploy SayTaxi to Fly.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Nombre de la aplicación existente en Fly.io"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Validar versión
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm verify:release
+
+      - name: Desplegar en Fly.io
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Publicar servicio
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --config fly.toml --app "${{ inputs.app }}"

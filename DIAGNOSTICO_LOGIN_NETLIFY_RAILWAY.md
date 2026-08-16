@@ -26,3 +26,7 @@ Restaurar el backend de Railway y cargar sus variables requiere acceso a ese pro
 - El proyecto `saytaxi` está publicado mediante Netlify Drop.
 - No tenía variables de entorno configuradas; en particular, faltaba `VITE_API_BASE_URL`, por lo que la compilación usaba rutas relativas contra el dominio estático.
 
+
+## Corrección publicada y estado de validación
+
+La interfaz se reconstruyó con `VITE_API_BASE_URL=https://saytaxi-production.up.railway.app`, se publicó en Netlify y el commit `9369b05` se publicó en GitHub. El estado de GitHub para Railway figura como exitoso; sin embargo, la comprobación directa posterior de `https://saytaxi-production.up.railway.app/healthz` continúa devolviendo `502 Application failed to respond`. Esto confirma que el bloqueo restante está en el proceso, las variables o los servicios dependientes de Railway y requiere revisar sus registros de ejecución.
